@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 0 — Requirements, Environment and Design: complete.**
+**Stage 1 — CUDA Project Foundation: complete.**
 
-This repository currently contains design and methodology documentation only. It intentionally has no CUDA kernels, CMake project, generated benchmark data, or performance claims. Stage 1 will begin only after its prerequisites are satisfied and the stage is explicitly started.
+The repository now has a verified C++17/CUDA build, reusable CUDA error checking, device discovery, a device-information executable, and a CTest runtime smoke test. It intentionally has no computational kernels, benchmark harness, generated benchmark data, or performance claims. Stage 2 will begin only when explicitly requested.
 
 ## Goals
 
@@ -85,6 +85,35 @@ An optimization is not accepted because it should be faster. It is accepted only
 | 12 | Testing, portability, CI, packaging, and portfolio hardening |
 
 Stages are implemented one at a time. Completing one stage does not authorize work on the next.
+
+## Build and verify on the audited Windows machine
+
+CUDA 12.6 must use the installed MSVC 14.44 toolset rather than the newer default MSVC 19.51. From PowerShell, open a child command shell with that toolset selected:
+
+```powershell
+cmd.exe /k 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44'
+```
+
+Then run these commands in the resulting developer command shell:
+
+```bat
+cmake --preset windows-msvc-release
+cmake --build --preset windows-msvc-release
+ctest --preset windows-msvc-release
+build\warpforge-device-info.exe
+```
+
+The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
+
+## Foundation targets
+
+| Target | Responsibility |
+| --- | --- |
+| `WarpForge::warpforge` | Static library containing shared CUDA runtime functionality |
+| `warpforge_device_info` | Reports CUDA versions and useful properties for every detected device |
+| `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
+
+`CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
 
 ## Measured development platform
 
@@ -163,3 +192,65 @@ The primary GPU, CUDA Toolkit, Nsight Compute, Compute Sanitizer, and Git instal
 ### Definition-of-Done status
 
 **PASS.** The environment is understood, the architecture and benchmark philosophy are documented, the repository is initialized, and the project scope is clear. Missing build prerequisites are recorded as Stage 1 entry conditions rather than hidden or worked around.
+
+## Stage 1 completion report
+
+### Implemented
+
+- CMake C++17/CUDA project with a configurable architecture and local `sm_86` default
+- `warpforge` static library and `WarpForge::warpforge` alias
+- Checked CUDA runtime-call utility
+- CUDA driver/runtime version and device-property discovery
+- `warpforge-device-info` command-line application
+- CTest-integrated CUDA runtime smoke test
+- Reproducible Windows release configure, build, and test presets
+
+### Files
+
+- Root CMake configuration, Windows preset, and generated-file ignore rules
+- Public runtime headers under `include/warpforge/`
+- Device discovery implementation under `src/runtime/`
+- Device-information application under `apps/device_info/`
+- CUDA smoke test under `tests/cuda/`
+- Stage 1 status and toolchain documentation updates
+
+### Tests
+
+- Release configuration identifies CUDA 12.6.85 and MSVC 19.44.35228.
+- All library, application, and test targets compile and link.
+- `cuda.runtime_smoke` passes through CTest on the RTX 3050 Laptop GPU.
+- `warpforge-device-info` executes successfully and reports one CUDA device.
+
+### Benchmarks
+
+None. Benchmark infrastructure belongs to Stage 2, and Stage 1 reports no timing or throughput claims.
+
+### Measured results
+
+No performance results were measured. Runtime discovery observed one compute-capability 8.6 device with 16 streaming multiprocessors, a warp size of 32, 1024 maximum threads per block, and 4096 MiB of global memory.
+
+### Concepts learned
+
+- `nvcc` compiles CUDA translation units while using MSVC as its host compiler on Windows.
+- CUDA runtime calls can fail immediately, while asynchronous execution errors may surface only at a later synchronization boundary.
+- Compute capability describes device features; the build architecture selects generated device code.
+- Device limits must be queried rather than inferred from the GPU product name.
+
+### Known limitations
+
+- Only the audited Windows/MSVC/CUDA configuration has been built and run.
+- The bundled Ninja executable stalled before launching compiler commands in this OneDrive workspace, so the verified Windows preset uses NMake.
+- The smoke test validates the runtime and device path but does not launch a computational kernel; the first validation workload belongs to Stage 2.
+- No benchmark, numerical-comparison, RAII memory, stream, or event abstraction exists yet.
+
+### Git commit recommendation
+
+`feat(runtime): add CUDA project foundation and device discovery`
+
+### Definition of Done
+
+**PASS.** A fresh Release configuration builds, the device-information executable runs, the CUDA runtime smoke test passes through CTest, and no kernel optimization work has begun.
+
+### Next stage
+
+Stage 2 will add reusable validation, CUDA-event timing, statistical summaries, structured result export, and a CPU-versus-GPU VectorAdd validation workload. It will not begin until explicitly requested.

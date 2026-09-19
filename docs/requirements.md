@@ -56,12 +56,12 @@ The local CUDA 12.6 `crt/host_config.h` accepts `_MSC_VER` values from 1910 thro
 - MSVC 19.44 (`_MSC_VER` 1944) is within the local CUDA 12.6 guard.
 - MSVC 19.51 (`_MSC_VER` 1951) is outside that guard.
 
-Stage 1 must activate the Visual Studio developer environment and select the 14.44 toolset explicitly. The baseline must not use `-allow-unsupported-compiler` merely to force MSVC 19.51 past the guard. A minimal CUDA configure, compile, link, and runtime smoke test will be the final compatibility proof.
+Stage 1 activates the Visual Studio developer environment and selects the 14.44 toolset explicitly. The Windows CMake preset passes `--use-local-env` so `nvcc` retains that selection. The baseline does not use `-allow-unsupported-compiler` merely to force MSVC 19.51 past the guard. A CUDA configure, compile, link, and runtime smoke test now provide the compatibility proof.
 
 ### Missing command discovery
 
-- `cmake` is not currently available on `PATH`. Visual Studio Build Tools includes CMake 4.3.1-msvc1, so Stage 1 can invoke that executable explicitly or make it deliberately discoverable.
-- `cl` is not available in ordinary PowerShell, although both compiler installations exist. Builds must use a correctly initialized developer environment.
+- `cmake` is not available in ordinary PowerShell. Visual Studio Build Tools includes CMake 4.3.1-msvc1 and adds it to `PATH` in its developer environment.
+- `cl` is not available in ordinary PowerShell, although both compiler installations exist. The verified build initializes the developer environment with `-vcvars_ver=14.44`.
 - `nsys` is not available on `PATH`. Both installed versions can be invoked by absolute path; one version should be selected deliberately before profiling begins.
 
 These are diagnosed prerequisites, not evidence that the CUDA Toolkit itself is broken.
@@ -128,18 +128,18 @@ The staged project includes:
 
 The complete policy is defined in [benchmark_methodology.md](benchmark_methodology.md).
 
-## Stage 1 entry criteria
+## Stage 1 entry criteria and result
 
-Before creating build files or CUDA sources:
+The Stage 1 entry checks were completed as follows:
 
-1. Use the verified bundled CMake 4.3.1-msvc1 executable explicitly or expose it through a repeatable developer environment.
-2. Establish a repeatable shell or preset that selects MSVC toolset 14.44.
-3. Confirm CMake can detect CUDA 12.6 and the selected host compiler.
-4. Configure `sm_86` as the default local architecture while leaving it overridable.
-5. Compile, link, and run a minimal CUDA runtime smoke test.
-6. Record the exact successful configure and build commands.
+1. Bundled CMake 4.3.1-msvc1 is exposed through the Visual Studio developer environment.
+2. The documented shell command selects MSVC toolset 14.44 reproducibly.
+3. CMake detects CUDA 12.6.85 with host compiler MSVC 19.44.35228.
+4. `sm_86` is the configurable default architecture.
+5. The static library, device-information application, and runtime smoke test compile and link.
+6. CTest and the device-information application run successfully on the primary GPU.
 
-Stage 1 must stop and diagnose any failure at these boundaries rather than changing the architecture or reinstalling CUDA without evidence.
+The first Ninja configure path was diagnosed separately: the bundled Ninja process stalled before invoking MSVC in the OneDrive workspace. The verified Windows preset therefore uses NMake. This did not require reinstalling CUDA or bypassing its compiler guard.
 
 ## Authoritative references
 

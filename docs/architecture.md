@@ -43,7 +43,7 @@ The design prioritizes:
               +-----------------------+  +------------------+
 ```
 
-No box in this diagram is implemented during Stage 0. The diagram defines direction and responsibility, not completed functionality.
+Stage 1 implements the first narrow slice of the runtime/validation foundation: CUDA error checking, device discovery, a diagnostic application, and a runtime smoke test. Kernel, benchmark, and MiniInfer boxes remain future work.
 
 ## Component responsibilities
 
@@ -162,7 +162,7 @@ When implementation begins:
 - no unconditional device-wide synchronization is placed in a performance-sensitive path merely for convenience;
 - matrix multiplication exposes a small backend choice between custom CUDA and cuBLAS without leaking backend-specific state into MiniInfer orchestration.
 
-Exact APIs are intentionally deferred until the stage that implements and tests them.
+Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Later APIs remain deferred until the stage that implements and tests them.
 
 ## Stage boundaries
 
@@ -189,7 +189,7 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 
 ## Current limitations
 
-- The architecture has not yet been tested by compiled code.
-- No public API exists in Stage 0.
-- Linux, WSL2, PyTorch, cuBLAS, and TensorRT paths are planned but unvalidated.
+- The foundation has been compiled and run only on the audited Windows configuration.
+- The current public API covers device discovery and checked CUDA calls; no computational kernel API exists.
+- Linux, WSL2, PyTorch, cuBLAS, and TensorRT paths remain planned but unvalidated.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.
