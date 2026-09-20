@@ -43,7 +43,7 @@ The design prioritizes:
               +-----------------------+  +------------------+
 ```
 
-Stage 1 implements the first narrow slice of the runtime/validation foundation: CUDA error checking, device discovery, a diagnostic application, and a runtime smoke test. Kernel, benchmark, and MiniInfer boxes remain future work.
+Stages 1 and 2 implement the first foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Optimized kernels and MiniInfer remain future work.
 
 ## Component responsibilities
 
@@ -162,7 +162,7 @@ When implementation begins:
 - no unconditional device-wide synchronization is placed in a performance-sensitive path merely for convenience;
 - matrix multiplication exposes a small backend choice between custom CUDA and cuBLAS without leaking backend-specific state into MiniInfer orchestration.
 
-Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Later APIs remain deferred until the stage that implements and tests them.
+Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Later APIs remain deferred until the stage that implements and tests them.
 
 ## Stage boundaries
 
@@ -190,6 +190,6 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 ## Current limitations
 
 - The foundation has been compiled and run only on the audited Windows configuration.
-- The current public API covers device discovery and checked CUDA calls; no computational kernel API exists.
+- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, and baseline VectorAdd; no optimized kernel family exists.
 - Linux, WSL2, PyTorch, cuBLAS, and TensorRT paths remain planned but unvalidated.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.

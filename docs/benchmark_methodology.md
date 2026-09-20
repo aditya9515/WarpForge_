@@ -93,6 +93,8 @@ Reported summaries should include:
 
 The minimum can approximate a low-interference execution, while median and p95 reveal typical behavior and tail variation. No single statistic is treated as the complete result. Outliers are retained unless a documented system event invalidates the run; discarded samples and the reason must be recorded.
 
+WarpForge computes median and p95 with linear interpolation between adjacent sorted samples. Standard deviation is the sample standard deviation (`N - 1` denominator) and is zero for a single sample.
+
 ## Derived metrics
 
 Derived metrics must state their formulas and byte/operation counting conventions.
@@ -121,7 +123,14 @@ Each persisted benchmark result should contain, where applicable:
 - timestamp and Git commit;
 - profiler status and notes.
 
-Stage 2 will define the concrete JSON/CSV schema. Until then, this list is the semantic contract.
+Stage 2 defines JSON schema version 1 at [`benchmarks/schema/v1.json`](../benchmarks/schema/v1.json). A result contains metadata, benchmark configuration, millisecond statistics, correctness, derived metrics, and every measured sample. Non-finite correctness diagnostics are serialized as `null`; timing samples must always be finite and non-negative. CSV export remains a later extension.
+
+## Stage 2 implementation
+
+- `validate_fp32` applies the combined absolute/relative rule and reports failures, worst index, maximum/mean absolute error, and maximum relative error.
+- `measure_cuda_kernel` allocates its CUDA events before warmup, synchronizes after warmup, and records one event-delimited sample per measured iteration.
+- Benchmark callbacks contain only the GPU work under study. VectorAdd allocation, initialization, H2D copies, validation D2H copy, and JSON output remain outside the measured interval.
+- The first workload uses seed `2027`, 256 threads per block, CUDA launch-error checking, and a CPU reference.
 
 ## Comparison rules
 

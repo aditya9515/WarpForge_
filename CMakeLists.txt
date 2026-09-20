@@ -10,6 +10,18 @@ project(
 include(CTest)
 find_package(CUDAToolkit 12.6 REQUIRED)
 
+set(WARPFORGE_GIT_COMMIT "unknown")
+find_package(Git QUIET)
+if(Git_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE WARPFORGE_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     set(CMAKE_CUDA_ARCHITECTURES 86 CACHE STRING "CUDA architectures to build for")
 endif()
@@ -33,7 +45,15 @@ function(warpforge_enable_warnings target)
     endif()
 endfunction()
 
-add_library(warpforge STATIC src/runtime/device.cu)
+add_library(
+    warpforge
+    STATIC
+        src/benchmark.cpp
+        src/benchmark_cuda.cu
+        src/kernels/vector/vector_add.cu
+        src/runtime/device.cu
+        src/validation.cpp
+)
 add_library(WarpForge::warpforge ALIAS warpforge)
 
 target_compile_features(warpforge PUBLIC cxx_std_17 cuda_std_17)
@@ -43,6 +63,13 @@ target_include_directories(
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 target_link_libraries(warpforge PUBLIC CUDA::cudart)
+target_compile_definitions(
+    warpforge
+    PRIVATE
+        WARPFORGE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
+        WARPFORGE_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+        WARPFORGE_GIT_COMMIT="${WARPFORGE_GIT_COMMIT}"
+)
 warpforge_enable_warnings(warpforge)
 
 add_executable(warpforge_device_info apps/device_info/main.cpp)
@@ -50,12 +77,64 @@ set_target_properties(warpforge_device_info PROPERTIES OUTPUT_NAME "warpforge-de
 target_link_libraries(warpforge_device_info PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_device_info)
 
+add_executable(warpforge_benchmark_vector_add apps/benchmarks/vector_add.cpp)
+set_target_properties(
+    warpforge_benchmark_vector_add
+    PROPERTIES OUTPUT_NAME "warpforge-benchmark-vector-add"
+)
+target_link_libraries(warpforge_benchmark_vector_add PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_benchmark_vector_add)
+
 if(BUILD_TESTING)
+    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+
+    add_executable(warpforge_validation_test tests/cpu/validation_test.cpp)
+    target_link_libraries(warpforge_validation_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_validation_test)
+
+    add_executable(warpforge_benchmark_statistics_test tests/cpu/benchmark_statistics_test.cpp)
+    target_link_libraries(warpforge_benchmark_statistics_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_benchmark_statistics_test)
+
     add_executable(warpforge_cuda_smoke tests/cuda/runtime_smoke_test.cpp)
     set_target_properties(warpforge_cuda_smoke PROPERTIES OUTPUT_NAME "warpforge-cuda-smoke")
     target_link_libraries(warpforge_cuda_smoke PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_cuda_smoke)
 
+    add_executable(warpforge_vector_add_test tests/cuda/vector_add_test.cpp)
+    target_link_libraries(warpforge_vector_add_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_vector_add_test)
+
+    add_test(NAME cpu.validation COMMAND warpforge_validation_test)
+    add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
+    add_test(NAME cuda.vector_add COMMAND warpforge_vector_add_test)
+    add_test(
+        NAME benchmark.vector_add
+        COMMAND
+            warpforge_benchmark_vector_add
+            --size 4097
+            --warmups 2
+            --iterations 5
+            --output ${CMAKE_CURRENT_BINARY_DIR}/test-results/vector_add.json
+    )
+    add_test(
+        NAME benchmark.json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_benchmark_json.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/vector_add.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/schema/v1.json
+    )
+
+    set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
+    set_tests_properties(cuda.vector_add PROPERTIES LABELS "cuda;correctness")
+    set_tests_properties(benchmark.vector_add PROPERTIES LABELS "cuda;benchmark")
+    set_tests_properties(
+        benchmark.json_valid
+        PROPERTIES
+            DEPENDS benchmark.vector_add
+            LABELS "benchmark;schema"
+    )
 endif()
