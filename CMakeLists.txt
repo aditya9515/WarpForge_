@@ -50,6 +50,7 @@ add_library(
     STATIC
         src/benchmark.cpp
         src/benchmark_cuda.cu
+        src/kernels/memory/memory.cu
         src/kernels/vector/vector_add.cu
         src/runtime/device.cu
         src/validation.cpp
@@ -85,6 +86,14 @@ set_target_properties(
 target_link_libraries(warpforge_benchmark_vector_add PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_benchmark_vector_add)
 
+add_executable(warpforge_benchmark_memory apps/benchmarks/memory.cpp)
+set_target_properties(
+    warpforge_benchmark_memory
+    PROPERTIES OUTPUT_NAME "warpforge-benchmark-memory"
+)
+target_link_libraries(warpforge_benchmark_memory PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_benchmark_memory)
+
 if(BUILD_TESTING)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
@@ -105,10 +114,15 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_vector_add_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_vector_add_test)
 
+    add_executable(warpforge_memory_test tests/cuda/memory_test.cpp)
+    target_link_libraries(warpforge_memory_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_memory_test)
+
     add_test(NAME cpu.validation COMMAND warpforge_validation_test)
     add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
     add_test(NAME cuda.vector_add COMMAND warpforge_vector_add_test)
+    add_test(NAME cuda.memory COMMAND warpforge_memory_test)
     add_test(
         NAME benchmark.vector_add
         COMMAND
@@ -126,15 +140,39 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/vector_add.json
             ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/schema/v1.json
     )
+    add_test(
+        NAME benchmark.memory
+        COMMAND
+            warpforge_benchmark_memory
+            --size 4097
+            --rows 37
+            --columns 53
+            --warmups 1
+            --iterations 3
+            --output-dir ${CMAKE_CURRENT_BINARY_DIR}/test-results/memory
+    )
+    add_test(
+        NAME benchmark.memory_json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_memory_results.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/memory
+    )
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
-    set_tests_properties(cuda.vector_add PROPERTIES LABELS "cuda;correctness")
-    set_tests_properties(benchmark.vector_add PROPERTIES LABELS "cuda;benchmark")
+    set_tests_properties(cuda.vector_add cuda.memory PROPERTIES LABELS "cuda;correctness")
+    set_tests_properties(benchmark.vector_add benchmark.memory PROPERTIES LABELS "cuda;benchmark")
     set_tests_properties(
         benchmark.json_valid
         PROPERTIES
             DEPENDS benchmark.vector_add
+            LABELS "benchmark;schema"
+    )
+    set_tests_properties(
+        benchmark.memory_json_valid
+        PROPERTIES
+            DEPENDS benchmark.memory
             LABELS "benchmark;schema"
     )
 endif()
