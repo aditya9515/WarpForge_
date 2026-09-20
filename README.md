@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 2 — Validation and Benchmark Infrastructure: complete.**
+**Stage 3 — CUDA Execution and Memory Engineering: complete.**
 
-The repository now has a verified C++17/CUDA build, reusable CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event kernel timing, statistical summaries, versioned JSON export, and a CPU-versus-CUDA VectorAdd pipeline. VectorAdd exists to validate this infrastructure; it is not presented as the project's optimization feature. Stage 3 will begin only when explicitly requested.
+The repository now has validated SAXPY, custom copy, strided-access, and naive/tiled transpose kernels; block-size and stride sweeps; pageable/pinned and sync/async transfer measurements; and single/two-stream pipeline evidence. Stage 3 preserves the measured neutral two-stream result. Stage 4 will begin only when explicitly requested.
 
 ## Goals
 
@@ -102,17 +102,19 @@ cmake --build --preset windows-msvc-release
 ctest --preset windows-msvc-release
 build\warpforge-device-info.exe
 build\warpforge-benchmark-vector-add.exe --size 1048576 --warmups 10 --iterations 100 --output benchmarks\results\vector_add.json
+build\warpforge-benchmark-memory.exe --size 16777216 --rows 2048 --columns 1536 --warmups 10 --iterations 100 --output-dir benchmarks\results\memory
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
 
-## Foundation targets
+## Build targets
 
 | Target | Responsibility |
 | --- | --- |
 | `WarpForge::warpforge` | Static library containing shared CUDA runtime functionality |
 | `warpforge_device_info` | Reports CUDA versions and useful properties for every detected device |
 | `warpforge_benchmark_vector_add` | Runs CPU reference, CUDA validation, event timing, statistics, and JSON export |
+| `warpforge_benchmark_memory` | Runs Stage 3 block, stride, transpose, transfer, and stream experiments |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
@@ -147,6 +149,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [System architecture](docs/architecture.md)
 - [Benchmark and validation methodology](docs/benchmark_methodology.md)
 - [VectorAdd validation baseline](docs/performance/vector_add.md)
+- [CUDA execution and memory engineering](docs/performance/memory.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -325,3 +328,67 @@ The bandwidth calculation counts two FP32 reads and one FP32 write per element. 
 ### Next stage
 
 Stage 3 will run controlled execution and memory experiments covering block sizes, coalescing and stride, transfers, transpose, pinned memory, asynchronous copies, and stream overlap. It will not begin until explicitly requested.
+
+## Stage 3 completion report
+
+### Implemented
+
+- CPU/CUDA SAXPY, custom FP32 copy, strided gather, and naive/tiled transpose
+- Controlled 32, 64, 128, 256, and 512-thread block sweeps
+- Controlled stride 1, 2, 4, 8, 16, and 32 access experiment
+- Pageable/pinned and synchronous/asynchronous transfer comparisons
+- Pinned eight-chunk single/two-stream H2D → SAXPY → D2H pipelines
+- Per-case schema-v1 JSON, CSV summary, and Nsight Systems trace evidence
+
+### Files
+
+- Public memory-kernel APIs in `include/warpforge/memory.cuh`
+- CUDA implementations in `src/kernels/memory/memory.cu`
+- Experiment runner in `apps/benchmarks/memory.cpp`
+- CUDA correctness and result-contract tests
+- 24 measured JSON records, a CSV summary, profiler excerpts, and this performance report
+
+### Tests
+
+All nine Release CTests pass. Stage 3 correctness covers empty and irregular 1D inputs, every requested block size and stride, rectangular/tail-safe transposes, invalid arguments, and explicit two-stream ordering. All 24 report records pass validation with zero failures.
+
+### Benchmarks and measured results
+
+The report run used code commit `3c30bc7`, seed `2027`, 50 warmups, and 500 samples per case on the RTX 3050 Laptop GPU.
+
+- strongest SAXPY result: `1.074176 ms`, `187.424 GB/s` at 256 and 512 threads
+- strongest custom-copy result: `0.731136 ms`, `183.574 GB/s` at 128 threads
+- stride 1 → stride 8: `163.840 GB/s` → `40.570 GB/s`
+- tiled transpose: `0.141312 ms`, `3.007×` faster than naive
+- pinned synchronous round trip: `1.649×` faster than pageable synchronous
+- two-stream pipeline: `17.707150 ms`, `0.103%` slower than the single-stream result
+
+Nsight Systems used distinct streams but observed serialized H2D, SAXPY, and D2H intervals. No transfer/compute overlap occurred in the representative capture.
+
+### Concepts learned
+
+- Block size has a plateau; maximum threads per block is not automatically fastest.
+- Adjacent warp accesses preserve useful bytes per memory transaction, while stride rapidly reduces them.
+- Padded shared-memory tiling can make both transpose directions coalesced.
+- Pinned memory can improve transfer throughput, but asynchronous calls require independent work and actual device scheduling overlap to help.
+- Separate streams express concurrency; a timeline must confirm whether concurrency occurred.
+
+### Known limitations
+
+- Measurements cover one Windows laptop GPU and one shape per experiment family.
+- GPU clocks were not locked; endpoint temperature rose from 64 C to 80 C during the report suite.
+- Bandwidth values count logical bytes rather than physical DRAM transactions.
+- The Nsight report is used for ordering evidence, not headline latency, because instrumentation adds overhead.
+
+### Commits
+
+- `3c30bc7 feat(memory): add CUDA execution experiment suite`
+- `bench(memory): record Stage 3 memory experiments` (this evidence and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Every workload is correct; controlled measurements explain block-size, stride, transfer-memory, and transpose effects; and Nsight Systems confirms that the audited two-stream pipeline did not overlap or improve latency.
+
+### Next stage
+
+Stage 4 will implement FP32 sum and maximum reduction variants, arbitrary-length multi-pass reduction, size-aware validation, and Nsight Compute analysis. It will not begin until explicitly requested.

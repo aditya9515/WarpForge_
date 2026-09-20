@@ -1,0 +1,4 @@
+category,name,count,total_ns,average_ns,median_ns,minimum_ns,maximum_ns
+kernel,saxpy_kernel,32,4305431,134544.7,134991.5,131808,135551
+memory,host_to_device,64,69379256,1084050.9,987726.0,854622,1605148
+memory,device_to_host,32,34898313,1090572.3,993741.5,898558,1687900

@@ -123,7 +123,7 @@ Each persisted benchmark result should contain, where applicable:
 - timestamp and Git commit;
 - profiler status and notes.
 
-Stage 2 defines JSON schema version 1 at [`benchmarks/schema/v1.json`](../benchmarks/schema/v1.json). A result contains metadata, benchmark configuration, millisecond statistics, correctness, derived metrics, and every measured sample. Non-finite correctness diagnostics are serialized as `null`; timing samples must always be finite and non-negative. CSV export remains a later extension.
+Stage 2 defines JSON schema version 1 at [`benchmarks/schema/v1.json`](../benchmarks/schema/v1.json). A result contains metadata, benchmark configuration, millisecond statistics, correctness, derived metrics, and every measured sample. Non-finite correctness diagnostics are serialized as `null`; timing samples must always be finite and non-negative. Stage 3 adds a compact CSV index over a directory of schema-v1 JSON records; the JSON remains the authoritative source for per-sample data.
 
 ## Stage 2 implementation
 
@@ -146,6 +146,14 @@ A performance comparison is valid only when:
 - power, thermal, and competing-workload conditions are noted when they materially affect interpretation.
 
 Changing several optimization factors at once should be avoided because it weakens the causal conclusion. If unavoidable, the result must be described as a combined change.
+
+## Stage 3 transfer timing
+
+- Kernel-only SAXPY, copy, stride, and transpose comparisons continue to use CUDA events.
+- Host-transfer and multi-stream pipeline experiments use a host steady clock around the complete enqueue-and-synchronize operation because CPU blocking and staging are part of the question.
+- Pageable and pinned comparisons use identical byte counts and copy directions.
+- Single- and two-stream pipelines use identical pinned inputs, chunking, kernels, outputs, and validation; only stream assignment changes.
+- Nsight Systems runs are separate from report timing and are used only to establish ordering and overlap.
 
 ## Profiling workflow
 
