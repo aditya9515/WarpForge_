@@ -51,6 +51,7 @@ add_library(
         src/benchmark.cpp
         src/benchmark_cuda.cu
         src/kernels/memory/memory.cu
+        src/kernels/reduction/reduction.cu
         src/kernels/vector/vector_add.cu
         src/runtime/device.cu
         src/validation.cpp
@@ -94,6 +95,14 @@ set_target_properties(
 target_link_libraries(warpforge_benchmark_memory PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_benchmark_memory)
 
+add_executable(warpforge_benchmark_reduction apps/benchmarks/reduction.cpp)
+set_target_properties(
+    warpforge_benchmark_reduction
+    PROPERTIES OUTPUT_NAME "warpforge-benchmark-reduction"
+)
+target_link_libraries(warpforge_benchmark_reduction PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_benchmark_reduction)
+
 if(BUILD_TESTING)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
@@ -118,11 +127,16 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_memory_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_memory_test)
 
+    add_executable(warpforge_reduction_test tests/cuda/reduction_test.cpp)
+    target_link_libraries(warpforge_reduction_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_reduction_test)
+
     add_test(NAME cpu.validation COMMAND warpforge_validation_test)
     add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
     add_test(NAME cuda.vector_add COMMAND warpforge_vector_add_test)
     add_test(NAME cuda.memory COMMAND warpforge_memory_test)
+    add_test(NAME cuda.reduction COMMAND warpforge_reduction_test)
     add_test(
         NAME benchmark.vector_add
         COMMAND
@@ -158,11 +172,33 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_memory_results.py
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/memory
     )
+    add_test(
+        NAME benchmark.reduction
+        COMMAND
+            warpforge_benchmark_reduction
+            --size 65537
+            --warmups 1
+            --iterations 3
+            --output-dir ${CMAKE_CURRENT_BINARY_DIR}/test-results/reduction
+    )
+    add_test(
+        NAME benchmark.reduction_json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_reduction_results.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/reduction
+    )
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
-    set_tests_properties(cuda.vector_add cuda.memory PROPERTIES LABELS "cuda;correctness")
-    set_tests_properties(benchmark.vector_add benchmark.memory PROPERTIES LABELS "cuda;benchmark")
+    set_tests_properties(
+        cuda.vector_add cuda.memory cuda.reduction
+        PROPERTIES LABELS "cuda;correctness"
+    )
+    set_tests_properties(
+        benchmark.vector_add benchmark.memory benchmark.reduction
+        PROPERTIES LABELS "cuda;benchmark"
+    )
     set_tests_properties(
         benchmark.json_valid
         PROPERTIES
@@ -173,6 +209,12 @@ if(BUILD_TESTING)
         benchmark.memory_json_valid
         PROPERTIES
             DEPENDS benchmark.memory
+            LABELS "benchmark;schema"
+    )
+    set_tests_properties(
+        benchmark.reduction_json_valid
+        PROPERTIES
+            DEPENDS benchmark.reduction
             LABELS "benchmark;schema"
     )
 endif()
