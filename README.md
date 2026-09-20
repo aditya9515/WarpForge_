@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 1 — CUDA Project Foundation: complete.**
+**Stage 2 — Validation and Benchmark Infrastructure: complete.**
 
-The repository now has a verified C++17/CUDA build, reusable CUDA error checking, device discovery, a device-information executable, and a CTest runtime smoke test. It intentionally has no computational kernels, benchmark harness, generated benchmark data, or performance claims. Stage 2 will begin only when explicitly requested.
+The repository now has a verified C++17/CUDA build, reusable CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event kernel timing, statistical summaries, versioned JSON export, and a CPU-versus-CUDA VectorAdd pipeline. VectorAdd exists to validate this infrastructure; it is not presented as the project's optimization feature. Stage 3 will begin only when explicitly requested.
 
 ## Goals
 
@@ -101,6 +101,7 @@ cmake --preset windows-msvc-release
 cmake --build --preset windows-msvc-release
 ctest --preset windows-msvc-release
 build\warpforge-device-info.exe
+build\warpforge-benchmark-vector-add.exe --size 1048576 --warmups 10 --iterations 100 --output benchmarks\results\vector_add.json
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -111,6 +112,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | --- | --- |
 | `WarpForge::warpforge` | Static library containing shared CUDA runtime functionality |
 | `warpforge_device_info` | Reports CUDA versions and useful properties for every detected device |
+| `warpforge_benchmark_vector_add` | Runs CPU reference, CUDA validation, event timing, statistics, and JSON export |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
@@ -144,6 +146,8 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [Requirements and environment](docs/requirements.md)
 - [System architecture](docs/architecture.md)
 - [Benchmark and validation methodology](docs/benchmark_methodology.md)
+- [VectorAdd validation baseline](docs/performance/vector_add.md)
+- [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
 
@@ -254,3 +258,70 @@ No performance results were measured. Runtime discovery observed one compute-cap
 ### Next stage
 
 Stage 2 will add reusable validation, CUDA-event timing, statistical summaries, structured result export, and a CPU-versus-GPU VectorAdd validation workload. It will not begin until explicitly requested.
+
+## Stage 2 completion report
+
+### Implemented
+
+- Reusable FP32 tolerance comparison and detailed error summaries
+- CUDA-event kernel-only timing with warmup and per-sample collection
+- Min, mean, median, interpolated p95, and sample standard deviation
+- Versioned JSON schema and metadata-rich result export
+- Deterministic CPU and CUDA VectorAdd pipeline with seed `2027`
+- Configurable benchmark CLI and CTest JSON validation
+
+### Files
+
+- Public benchmark, validation, and VectorAdd headers under `include/warpforge/`
+- CPU statistics/validation and CUDA timing/kernel implementations under `src/`
+- VectorAdd benchmark application and focused CPU/CUDA/Python tests
+- JSON schema v1, measured result, methodology updates, and performance journal
+
+### Tests
+
+Six CTest cases pass in Release mode: validation, statistics, CUDA runtime smoke, VectorAdd correctness, benchmark execution, and JSON/schema parsing. VectorAdd coverage includes empty, tiny, warp-boundary, block-boundary, non-divisible, large, and multiple-block-size cases.
+
+### Benchmarks
+
+The report run used 1,048,576 FP32 elements, 256 threads per block, 4,096 blocks, 50 warmups, 500 measured iterations, and seed `2027`. Allocation, input generation, H2D copies, D2H validation, and JSON output were excluded from the CUDA-event interval.
+
+### Measured results
+
+On the RTX 3050 Laptop GPU, code commit `04ff8c9` measured:
+
+- minimum: `0.071680 ms`
+- mean: `0.073380 ms`
+- median: `0.072704 ms`
+- p95: `0.074405 ms`
+- sample standard deviation: `0.003197 ms`
+- median-derived effective bandwidth: `173.070 GB/s`
+- maximum absolute error: `0`
+
+The bandwidth calculation counts two FP32 reads and one FP32 write per element. These values describe this exact run, configuration, and timing boundary; they are not universal GPU specifications.
+
+### Concepts learned
+
+- CUDA events measure elapsed work in a stream without including host allocation or transfer setup.
+- A launch-error check validates enqueue/configuration; synchronizing the stop event surfaces asynchronous execution failures.
+- Warmup separates one-time initialization from measured steady-state work.
+- Median and p95 complement the minimum and mean when individual samples include interference or outliers.
+
+### Known limitations
+
+- Only kernel-only latency is reported; end-to-end timing is intentionally deferred.
+- VectorAdd uses a single baseline implementation and has not been profiled or optimized.
+- Effective bandwidth is based on logical algorithmic bytes, not measured physical DRAM transactions.
+- The JSON schema is parsed and contract-checked without adding a third-party JSON Schema validator.
+
+### Commits
+
+- `04ff8c9 feat(bench): add CUDA event validation pipeline`
+- `bench(vector): record Stage 2 validation baseline` (this measured-result and completion-report commit)
+
+### Definition of Done
+
+**PASS.** One command builds, executes the CPU reference and CUDA workload, validates correctness, measures kernel-only latency, reports statistics, and writes schema-versioned JSON.
+
+### Next stage
+
+Stage 3 will run controlled execution and memory experiments covering block sizes, coalescing and stride, transfers, transpose, pinned memory, asynchronous copies, and stream overlap. It will not begin until explicitly requested.
