@@ -50,6 +50,7 @@ add_library(
     STATIC
         src/benchmark.cpp
         src/benchmark_cuda.cu
+        src/kernels/gemm/gemm.cu
         src/kernels/memory/memory.cu
         src/kernels/reduction/reduction.cu
         src/kernels/vector/vector_add.cu
@@ -64,7 +65,7 @@ target_include_directories(
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
-target_link_libraries(warpforge PUBLIC CUDA::cudart)
+target_link_libraries(warpforge PUBLIC CUDA::cudart CUDA::cublas)
 target_compile_definitions(
     warpforge
     PRIVATE
@@ -103,6 +104,14 @@ set_target_properties(
 target_link_libraries(warpforge_benchmark_reduction PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_benchmark_reduction)
 
+add_executable(warpforge_benchmark_gemm apps/benchmarks/gemm.cu)
+set_target_properties(
+    warpforge_benchmark_gemm
+    PROPERTIES OUTPUT_NAME "warpforge-benchmark-gemm"
+)
+target_link_libraries(warpforge_benchmark_gemm PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_benchmark_gemm)
+
 if(BUILD_TESTING)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
@@ -131,12 +140,17 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_reduction_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_reduction_test)
 
+    add_executable(warpforge_gemm_test tests/cuda/gemm_test.cu)
+    target_link_libraries(warpforge_gemm_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_gemm_test)
+
     add_test(NAME cpu.validation COMMAND warpforge_validation_test)
     add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
     add_test(NAME cuda.vector_add COMMAND warpforge_vector_add_test)
     add_test(NAME cuda.memory COMMAND warpforge_memory_test)
     add_test(NAME cuda.reduction COMMAND warpforge_reduction_test)
+    add_test(NAME cuda.gemm COMMAND warpforge_gemm_test)
     add_test(
         NAME benchmark.vector_add
         COMMAND
@@ -188,15 +202,31 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_reduction_results.py
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/reduction
     )
+    add_test(
+        NAME benchmark.gemm
+        COMMAND
+            warpforge_benchmark_gemm
+            --size 64
+            --warmups 1
+            --iterations 3
+            --output-dir ${CMAKE_CURRENT_BINARY_DIR}/test-results/gemm
+    )
+    add_test(
+        NAME benchmark.gemm_json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_gemm_results.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/gemm
+    )
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
     set_tests_properties(
-        cuda.vector_add cuda.memory cuda.reduction
+        cuda.vector_add cuda.memory cuda.reduction cuda.gemm
         PROPERTIES LABELS "cuda;correctness"
     )
     set_tests_properties(
-        benchmark.vector_add benchmark.memory benchmark.reduction
+        benchmark.vector_add benchmark.memory benchmark.reduction benchmark.gemm
         PROPERTIES LABELS "cuda;benchmark"
     )
     set_tests_properties(
@@ -215,6 +245,12 @@ if(BUILD_TESTING)
         benchmark.reduction_json_valid
         PROPERTIES
             DEPENDS benchmark.reduction
+            LABELS "benchmark;schema"
+    )
+    set_tests_properties(
+        benchmark.gemm_json_valid
+        PROPERTIES
+            DEPENDS benchmark.gemm
             LABELS "benchmark;schema"
     )
 endif()
