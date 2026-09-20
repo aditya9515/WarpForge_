@@ -43,7 +43,7 @@ The design prioritizes:
               +-----------------------+  +------------------+
 ```
 
-Stages 1 and 2 implement the first foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Optimized kernels and MiniInfer remain future work.
+Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder with double-precision CPU sum validation and caller-owned multi-pass workspaces. GEMM, Transformer kernels, and MiniInfer remain future work.
 
 ## Component responsibilities
 
@@ -162,7 +162,7 @@ When implementation begins:
 - no unconditional device-wide synchronization is placed in a performance-sensitive path merely for convenience;
 - matrix multiplication exposes a small backend choice between custom CUDA and cuBLAS without leaking backend-specific state into MiniInfer orchestration.
 
-Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused SAXPY, copy, strided-access, and transpose launch APIs with explicit dimensions, launch choices, and streams. Later APIs remain deferred until the stage that implements and tests them.
+Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused SAXPY, copy, strided-access, and transpose launch APIs with explicit dimensions, launch choices, and streams. Stage 4 adds `ReductionOperation`, `ReductionVariant`, CPU references, workspace/pass sizing helpers, a size-aware sum validator, and `reduce_cuda(...)`. The reduction call keeps allocation outside the dispatcher, accepts an explicit stream, exposes each optimization variant, and uses ping-pong workspaces for deterministic multi-pass execution. Later APIs remain deferred until the stage that implements and tests them.
 
 ## Stage boundaries
 
@@ -190,6 +190,6 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 ## Current limitations
 
 - The foundation has been compiled and run only on the audited Windows configuration.
-- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, VectorAdd, Stage 3 memory kernels, and selectable launch parameters; reduction, GEMM, and Transformer kernels remain deferred.
+- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, VectorAdd, Stage 3 memory kernels, and Stage 4 sum/maximum reductions with selectable launch parameters; GEMM and Transformer kernels remain deferred.
 - Linux, WSL2, PyTorch, cuBLAS, and TensorRT paths remain planned but unvalidated.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.

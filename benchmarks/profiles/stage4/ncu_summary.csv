@@ -1,0 +1,3 @@
+variant,grid_blocks,block_threads,profile_duration_us,dram_bandwidth_gbps,dram_throughput_pct,sm_throughput_pct,achieved_occupancy_pct,theoretical_occupancy_pct,registers_per_thread,dynamic_shared_bytes,waves_per_sm,warp_cycles_per_issued_instruction,stall_barrier_cycles_per_instruction,stall_mio_throttle_cycles_per_instruction,stall_long_scoreboard_cycles_per_instruction,shared_excessive_wavefronts,fp32_adds_per_cycle
+naive_interleaved,65536,256,1572.672,43.264,22.13,88.41,89.92,100.00,16,1024,682.67,31.53,8.65,5.75,5.50,6356992,8.59
+warp_shuffle,32768,256,401.568,169.265,86.60,65.84,74.80,100.00,16,32,341.33,28.27,2.56,0.56,14.75,0,111.02

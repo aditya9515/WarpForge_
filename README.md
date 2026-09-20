@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 3 — CUDA Execution and Memory Engineering: complete.**
+**Stage 4 — Parallel Reduction Engine: complete.**
 
-The repository now has validated SAXPY, custom copy, strided-access, and naive/tiled transpose kernels; block-size and stride sweeps; pageable/pinned and sync/async transfer measurements; and single/two-stream pipeline evidence. Stage 3 preserves the measured neutral two-stream result. Stage 4 will begin only when explicitly requested.
+The repository now has validated, arbitrary-length FP32 sum and maximum reductions spanning naive interleaved, shared-memory, reduced-divergence, unrolled, and warp-shuffle variants. The strongest measured variant is `2.709×` faster for sum and `2.716×` for maximum than the naive baseline on the audited report workload. Nsight Compute connects that improvement to fewer passes, elimination of excessive shared-memory wavefronts, less barrier pressure, and higher DRAM utilization. Stage 5 will begin only when explicitly requested.
 
 ## Goals
 
@@ -103,6 +103,7 @@ ctest --preset windows-msvc-release
 build\warpforge-device-info.exe
 build\warpforge-benchmark-vector-add.exe --size 1048576 --warmups 10 --iterations 100 --output benchmarks\results\vector_add.json
 build\warpforge-benchmark-memory.exe --size 16777216 --rows 2048 --columns 1536 --warmups 10 --iterations 100 --output-dir benchmarks\results\memory
+build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmups 10 --iterations 100 --output-dir benchmarks\results\reduction
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -115,6 +116,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | `warpforge_device_info` | Reports CUDA versions and useful properties for every detected device |
 | `warpforge_benchmark_vector_add` | Runs CPU reference, CUDA validation, event timing, statistics, and JSON export |
 | `warpforge_benchmark_memory` | Runs Stage 3 block, stride, transpose, transfer, and stream experiments |
+| `warpforge_benchmark_reduction` | Validates and measures Stage 4 sum/maximum reduction variants |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
@@ -150,6 +152,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [Benchmark and validation methodology](docs/benchmark_methodology.md)
 - [VectorAdd validation baseline](docs/performance/vector_add.md)
 - [CUDA execution and memory engineering](docs/performance/memory.md)
+- [Parallel reduction engine](docs/performance/reduction.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -392,3 +395,67 @@ Nsight Systems used distinct streams but observed serialized H2D, SAXPY, and D2H
 ### Next stage
 
 Stage 4 will implement FP32 sum and maximum reduction variants, arbitrary-length multi-pass reduction, size-aware validation, and Nsight Compute analysis. It will not begin until explicitly requested.
+
+## Stage 4 completion report
+
+### Implemented
+
+- Public sum/maximum operation and five-variant reduction interfaces
+- Double-precision CPU sum and FP32 CPU maximum references
+- Arbitrary-length non-atomic, multi-pass CUDA reduction with caller-owned ping-pong workspaces
+- Naive interleaved, sequential shared-memory, two-elements-per-thread reduced-divergence, unrolled, and warp-shuffle kernels
+- Size-aware sum tolerance, deterministic report runner, schema-v1 JSON, and CSV summary
+- Nsight Compute comparison of the baseline and strongest implementation
+
+### Files
+
+- Public API in `include/warpforge/reduction.cuh`
+- CUDA reference helpers, dispatch, and kernels in `src/kernels/reduction/reduction.cu`
+- Benchmark runner in `apps/benchmarks/reduction.cpp`
+- CUDA correctness and result-contract tests
+- Ten measured JSON records, summary CSV, compact profiler metrics, and the reduction performance journal
+
+### Tests
+
+All 12 Release CTests pass. Reduction coverage includes both operations, every variant, power-of-two and irregular inputs, values below a warp or block, boundary/tail cases, 1,048,576-element arrays, negative-only maximum inputs, block sizes 32–512, invalid arguments, undersized workspace handling, and double-precision CPU accumulation. All ten report JSON records pass the Stage 4 result validator.
+
+### Benchmarks and measured results
+
+The report run used code commit `26ac9d9`, 16,777,216 FP32 elements, 256 threads per block, seed `2027`, 50 warmups, and 500 measured samples per case.
+
+- strongest sum result: warp shuffle at `0.365536 ms`, `183.590 GB/s`, and `2.709×` baseline speedup
+- strongest maximum result: warp shuffle at `0.364544 ms`, `184.090 GB/s`, and `2.716×` baseline speedup
+- largest sum absolute error: `0.000143409` against a double-precision CPU reference, within the declared size-aware tolerance
+- maximum error: exactly `0` for every variant
+- neutral step retained: sequential shared memory measured `0.999×` for sum and `0.998×` for maximum
+
+Nsight Compute measured the first-pass DRAM bandwidth rising from `43.264 GB/s` to `169.265 GB/s`, dynamic shared memory falling from 1,024 to 32 bytes per block, and excessive shared-memory wavefronts falling from 6,356,992 to zero. The optimized first pass is memory-bound by the captured evidence.
+
+### Concepts learned
+
+- A deterministic multi-pass tree handles arbitrary lengths without depending on a global floating-point atomic.
+- Removing index arithmetic alone is insufficient when memory access and synchronization remain dominant.
+- Loading two elements per thread can reduce both grid size and pass count.
+- Warp shuffle keeps the final tree in registers and minimizes shared-memory coordination.
+- Higher occupancy is not automatically faster: the optimized kernel improved while achieved occupancy decreased.
+
+### Known limitations
+
+- Measurements cover one RTX 3050 Laptop GPU, one large input, and one report block size.
+- GPU clocks were not locked, and the report suite ended at an 86 C GPU temperature.
+- FP32 reduction order differs from serial double accumulation; compensated summation is not implemented.
+- Effective input bandwidth counts original logical bytes, while profiler DRAM bandwidth is a separate physical-traffic measurement.
+- Nsight Compute required a UAC-authorized elevated process for performance counters; no driver setting was changed.
+
+### Commits
+
+- `26ac9d9 feat(reduction): add multi-pass optimization ladder`
+- `bench(reduction): record Stage 4 optimization results` (this evidence and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Every variant is correct for the tested edge cases, arbitrary lengths use a non-atomic multi-pass path, the strongest sum and maximum variants have reproducible measurements, and the optimization conclusion is supported by Nsight Compute evidence.
+
+### Next stage
+
+Stage 5 will define GEMM semantics and implement the CPU, custom CUDA, mixed-precision/Tensor Core experiment, and cuBLAS comparison ladder. It will not begin until explicitly requested.

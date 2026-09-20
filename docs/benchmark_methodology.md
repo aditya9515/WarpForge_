@@ -155,6 +155,15 @@ Changing several optimization factors at once should be avoided because it weake
 - Single- and two-stream pipelines use identical pinned inputs, chunking, kernels, outputs, and validation; only stream assignment changes.
 - Nsight Systems runs are separate from report timing and are used only to establish ordering and overlap.
 
+## Stage 4 reduction timing and validation
+
+- FP32 sum uses CPU double-precision accumulation as its reference. Its declared tolerance is `atol = 1e-5 * (1 + ceil(log2(N)))` and `rtol = 2e-5`, reflecting the input-length-dependent accumulation tree without relaxing validation after observing a result.
+- Maximum uses exact comparison for the finite deterministic inputs in the Stage 4 suite.
+- Each arbitrary-length reduction uses non-atomic multi-pass execution. Every pass required to produce the scalar is inside one CUDA-event interval.
+- Caller-owned ping-pong workspace allocation, input transfer, scalar readback, CPU reference work, validation, and serialization remain outside kernel-only timing.
+- Reduction effective input bandwidth counts only the original logical input bytes. It is not presented as physical DRAM bandwidth and does not include intermediate-pass traffic.
+- Nsight Compute captures are separate, instrumented executions used for causal evidence. Their durations are never substituted for the uninstrumented report results.
+
 ## Profiling workflow
 
 ### Nsight Systems
