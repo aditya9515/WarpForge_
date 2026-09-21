@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 6 — Transformer-Oriented CUDA Kernels: complete.**
+**Stage 7 — Fusion and Asynchronous Execution: complete.**
 
-The repository now has validated FP32 Softmax, RMSNorm, interleaved RoPE, SiLU, add, multiply, scale, unfused SwiGLU, and causal-mask paths. At the report shapes, warp Softmax measures `0.200672 ms` (`5.353×` naive) and block RMSNorm measures `0.197504 ms` (`4.599×` naive). Every report record passes its declared tolerance. Stage 7 will begin only when explicitly requested.
+The repository now has retained, measured fused residual + RMSNorm and fused SwiGLU paths plus a correctness-tested pinned two-stream event pipeline. Fusion improves median latency by `1.477×` and `1.631×`, respectively. The two-stream pipeline produces no observed GPU overlap and is `4.28%` slower than one stream, so the simpler path remains preferred. Stage 8 will begin only when explicitly requested.
 
 ## Goals
 
@@ -106,6 +106,7 @@ build\warpforge-benchmark-memory.exe --size 16777216 --rows 2048 --columns 1536 
 build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmups 10 --iterations 100 --output-dir benchmarks\results\reduction
 build\warpforge-benchmark-gemm.exe --sizes 256,512,1024,2048 --warmups 10 --iterations 100 --output-dir benchmarks\results\gemm
 build\warpforge-benchmark-transformer.exe --rows 4096 --columns 1024 --elements 16777216 --sequence 2048 --heads 8 --head-dim 64 --mask-length 512 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage6
+build\warpforge-benchmark-fusion.exe --rows 4096 --columns 1024 --elements 16777216 --pipeline-elements 16777216 --chunks 8 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage7
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -121,6 +122,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | `warpforge_benchmark_reduction` | Validates and measures Stage 4 sum/maximum reduction variants |
 | `warpforge_benchmark_gemm` | Validates and measures custom FP32/FP16 GEMM and matched cuBLAS baselines |
 | `warpforge_benchmark_transformer` | Validates and measures Stage 6 Transformer-oriented FP32 kernels |
+| `warpforge_benchmark_fusion` | Compares separate/fused Transformer paths and single/two-stream pinned pipelines |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
@@ -159,6 +161,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [Parallel reduction engine](docs/performance/reduction.md)
 - [GEMM optimization ladder](docs/performance/gemm.md)
 - [Transformer-oriented CUDA kernels](docs/performance/transformer_kernels.md)
+- [Fusion and asynchronous execution](docs/performance/fusion.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -604,3 +607,74 @@ Allocation, transfers, CPU reference work, validation, and serialization are exc
 ### Next stage
 
 Stage 7 will compare separate and fused residual + RMSNorm and SiLU + multiply paths, account for logical memory traffic, inspect resource pressure, and revisit the pinned two-stream pipeline with explicit events. It will not begin until explicitly requested.
+
+## Stage 7 completion report
+
+### Implemented
+
+- Fused FP32 residual + RMSNorm with an explicit CPU reference and CUDA stream
+- Fused FP32 SiLU + multiply (SwiGLU) with exact input/output alias support
+- Logical global-memory access accounting for separate and fused graphs
+- Pinned one/two-stream eight-chunk H2D → SiLU → D2H pipeline
+- Per-stream completion events with no device-wide synchronization
+- Unified benchmark/JSON validator plus Nsight Compute and Nsight Systems evidence
+
+### Files
+
+- Public fusion API in `include/warpforge/fusion.cuh`
+- Fused CUDA/CPU implementations in `src/kernels/transformer/fusion.cu`
+- Correctness and pipeline-ordering coverage in `tests/cuda/fusion_test.cpp`
+- Benchmark runner in `apps/benchmarks/fusion.cpp` and Python result validator
+- Six report JSON records, summary CSV, compact profiler exports, profiler commands, and `docs/performance/fusion.md`
+
+### Tests
+
+All 25 Release CTests pass. Fusion coverage includes empty, tiny, irregular, boundary, and large shapes; extreme activations; fused and separate paths against the same CPU reference; exact data-input aliasing; invalid weight alias, epsilon, and block size; and an event-completed two-stream pinned pipeline. All six report records pass the Stage 7 JSON contract with zero failures.
+
+### Benchmarks and measured results
+
+The report run used clean code commit `b21cdf0`, seed `2027`, 50 warmups, and 500 samples per case on the RTX 3050 Laptop GPU.
+
+- residual + RMSNorm separate: `0.468992 ms`; fused: `0.317440 ms`, `1.477×` speedup
+- SwiGLU separate: `1.808384 ms`; fused: `1.108992 ms`, `1.631×` speedup
+- pinned single-stream pipeline: `14.078150 ms`
+- pinned two-stream pipeline: `14.680550 ms`, `0.959×` baseline speed, or `4.28%` slower
+- maximum residual + RMSNorm error: `7.153e-7`
+- maximum SwiGLU error: `1.907e-6`
+- maximum pipeline error: `4.768e-7`
+
+Residual fusion reduces logical accesses from six to four per element; SwiGLU fusion reduces them from five to three. Both fused implementations are retained because the measured gains are material and correctness is unchanged.
+
+Nsight Compute reports no register/shared-memory penalty: fused residual + RMSNorm uses 18 registers and 1,024 bytes of dynamic shared memory; fused SwiGLU uses 16 registers and no shared memory. Their DRAM-throughput indicators reach 83.61% and 91.91%, supporting a memory-bound classification.
+
+Nsight Systems observes streams 15 and 16 but zero overlapping intervals across 48 two-stream GPU operations. The minimum gap is 1,728 ns and the device reports one asynchronous copy engine. The two-stream path remains documented but is not preferred.
+
+### Concepts learned
+
+- Fusion is valuable when it removes a real intermediate and launch without creating register or occupancy pressure.
+- Logical traffic reduction must be distinguished from profiler-measured physical transactions.
+- A correct asynchronous pipeline can still be slower when the hardware and scheduling path do not overlap work.
+- Events provide scoped completion without forcing unrelated work through a device-wide synchronization.
+- Distinct streams are an expression of possible concurrency, not proof that concurrency happened.
+
+### Known limitations
+
+- Results cover FP32 and one shape per operation on one thermally constrained Windows laptop GPU.
+- Endpoint temperature rose from 78 C to 81 C and clocks were not locked.
+- The pipeline's SiLU compute is short relative to transfers, and the audited device exposes one asynchronous copy engine.
+- No GEMM, attention, masking, or whole-sublayer fusion is implemented.
+- Buffer/stream/event ownership is still local and explicit; reusable runtime abstractions belong to Stage 8.
+
+### Commits
+
+- `6d81a8f feat(fusion): add fused Transformer kernels`
+- `b21cdf0 feat(fusion): add benchmark and event pipeline`
+- `bench(fusion): record Stage 7 profiler evidence` (this evidence and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Both fused operations are correct, faster, and profiler-audited without increased resource pressure. The explicit-event two-stream pipeline is correct, its lack of overlap is confirmed by Nsight Systems, and the negative performance result is retained honestly.
+
+### Next stage
+
+Stage 8 will add transparent move-only `DeviceBuffer`, `CudaStream`, `CudaEvent`, tensor shape/type/view ownership, reusable workspace, and custom/cuBLAS dispatch integration. Existing kernels and benchmarks will migrate to explicit views and streams while preserving measured behavior. It will not begin until explicitly requested.

@@ -1,0 +1,4 @@
+category,name,count,total_time_ns,average_time_ns
+kernel,silu_kernel,32,2988911,93403.5
+memory,H2D,32,21949151,685911.0
+memory,D2H,32,20875336,652354.3

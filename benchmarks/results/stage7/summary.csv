@@ -1,0 +1,7 @@
+schema_version,file,operation,implementation,timing_scope,median_ms,p95_ms,effective_bandwidth_gbps,speedup,logical_reads,logical_writes,max_absolute_error,validation_passed,git_commit
+1,residual_rmsnorm_separate.json,residual_rmsnorm,separate,kernel-only,0.46899199485778809,0.48230400681495667,214.63755693852306,1,4,2,7.152557373046875e-07,true,b21cdf0
+1,residual_rmsnorm_fused.json,residual_rmsnorm,fused,kernel-only,0.31744000315666199,0.32864321321249007,211.40644951065175,1.477419323948068,3,1,7.152557373046875e-07,true,b21cdf0
+1,swiglu_separate.json,swiglu,separate,kernel-only,1.8083839416503906,1.8330512106418608,185.54926986012231,1,3,2,1.9073486328125e-06,true,b21cdf0
+1,swiglu_fused.json,swiglu,fused,kernel-only,1.1089919805526733,1.1344704270362853,181.54016938848159,1.6306555623145,2,1,1.9073486328125e-06,true,b21cdf0
+1,pipeline_single_stream.json,pinned_silu_pipeline,single_stream,end-to-end,14.078150000000001,15.678614999999999,9.5337617513664785,1,1,1,4.76837158203125e-07,true,b21cdf0
+1,pipeline_two_stream.json,pinned_silu_pipeline,two_stream,end-to-end,14.68055,16.675055,9.1425544683271411,0.95896611502975027,1,1,4.76837158203125e-07,true,b21cdf0

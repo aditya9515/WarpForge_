@@ -184,6 +184,17 @@ Changing several optimization factors at once should be avoided because it weake
 - Speedup is reported only within the same operation: naive Softmax and naive RMSNorm are their respective baselines. Single-implementation cases report `1.0` rather than implying comparison with another primitive.
 - Stage 6 report runs use 50 warmups and 500 samples per case. Correctness is checked once before timing, and each result retains every sample plus the clean implementation commit.
 
+## Stage 7 fusion and pipeline timing
+
+- Separate and fused paths compute identical FP32 operations from identical inputs and use the same CPU reference/tolerance. Residual + RMSNorm uses `rmsnorm_tolerance(width)`; SwiGLU uses `atol=1e-5`, `rtol=1e-5`.
+- One CUDA-event interval encloses both launches for a separate path and the single launch for its fused candidate. Allocation, copies, validation, and serialization remain excluded.
+- Logical memory accounting follows the operation graph: separate/fused residual + RMSNorm use 4 reads + 2 writes versus 3 reads + 1 write; separate/fused SwiGLU use 3 reads + 2 writes versus 2 reads + 1 write. These counts do not assert physical DRAM transactions.
+- Fusion is retained only when correctness passes and matched report measurements show a material improvement. Register, shared-memory, occupancy, and memory-throughput evidence is checked separately with Nsight Compute.
+- The pipeline uses pinned host memory, fixed chunking, one device buffer per active stream, and explicit completion events. Each stream preserves H2D → kernel → D2H order; the host synchronizes only the completion events, not the entire device.
+- Pipeline latency uses a host steady clock from enqueue start through completion-event synchronization. It therefore includes copies, kernels, CUDA API/launch overhead, and host waiting, while excluding allocation/reference construction.
+- Single- and two-stream pipeline variants use identical inputs, chunks, kernels, outputs, timing boundaries, and validation. Nsight Systems—not stream count—is the authority for whether overlap occurred.
+- Stage 7 report runs use 50 warmups and 500 samples from clean code commit `b21cdf0`. Profiler runs are separate instrumented executions and never replace report timings.
+
 ## Profiling workflow
 
 ### Nsight Systems
