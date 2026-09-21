@@ -117,6 +117,14 @@ set_target_properties(
 target_link_libraries(warpforge_benchmark_gemm PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_benchmark_gemm)
 
+add_executable(warpforge_benchmark_transformer apps/benchmarks/transformer.cpp)
+set_target_properties(
+    warpforge_benchmark_transformer
+    PROPERTIES OUTPUT_NAME "warpforge-benchmark-transformer"
+)
+target_link_libraries(warpforge_benchmark_transformer PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_benchmark_transformer)
+
 if(BUILD_TESTING)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
@@ -248,6 +256,28 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_gemm_results.py
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/gemm
     )
+    add_test(
+        NAME benchmark.transformer
+        COMMAND
+            warpforge_benchmark_transformer
+            --rows 37
+            --columns 53
+            --elements 4097
+            --sequence 17
+            --heads 2
+            --head-dim 16
+            --mask-length 17
+            --warmups 1
+            --iterations 3
+            --output-dir ${CMAKE_CURRENT_BINARY_DIR}/test-results/transformer
+    )
+    add_test(
+        NAME benchmark.transformer_json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_transformer_results.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/transformer
+    )
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
@@ -259,6 +289,7 @@ if(BUILD_TESTING)
     )
     set_tests_properties(
         benchmark.vector_add benchmark.memory benchmark.reduction benchmark.gemm
+        benchmark.transformer
         PROPERTIES LABELS "cuda;benchmark"
     )
     set_tests_properties(
@@ -283,6 +314,12 @@ if(BUILD_TESTING)
         benchmark.gemm_json_valid
         PROPERTIES
             DEPENDS benchmark.gemm
+            LABELS "benchmark;schema"
+    )
+    set_tests_properties(
+        benchmark.transformer_json_valid
+        PROPERTIES
+            DEPENDS benchmark.transformer
             LABELS "benchmark;schema"
     )
 endif()
