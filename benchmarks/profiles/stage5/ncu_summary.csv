@@ -1,0 +1,4 @@
+variant,data_type,m,n,k,grid_blocks,block_threads,profile_duration_us,dram_bandwidth_gbps,dram_throughput_pct,sm_throughput_pct,tensor_pipe_active_pct,achieved_occupancy_pct,theoretical_occupancy_pct,registers_per_thread,static_shared_bytes,warp_cycles_per_issued_instruction,stall_long_scoreboard_cycles_per_instruction,stall_lg_throttle_cycles_per_instruction,shared_excessive_wavefronts
+naive_fp32,fp32,1024,1024,1024,4096,256,7415.328,39.834,21.556,96.876,0.000,99.053,100.000,34,0,25.460,12.934,8.031,0
+register_blocked_fp32,fp32,1024,1024,1024,256,256,1501.504,16.767,8.578,57.349,0.000,66.355,66.667,56,8512,13.847,4.196,0.042,3670016
+wmma_fp16_fp32,fp16_input_fp32_accumulation,1024,1024,1024,4096,32,914.816,44.073,22.548,35.000,11.576,33.214,33.333,42,0,36.290,30.525,0.184,0

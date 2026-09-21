@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 4 — Parallel Reduction Engine: complete.**
+**Stage 5 — GEMM Optimization Ladder: complete.**
 
-The repository now has validated, arbitrary-length FP32 sum and maximum reductions spanning naive interleaved, shared-memory, reduced-divergence, unrolled, and warp-shuffle variants. The strongest measured variant is `2.709×` faster for sum and `2.716×` for maximum than the naive baseline on the audited report workload. Nsight Compute connects that improvement to fewer passes, elimination of excessive shared-memory wavefronts, less barrier pressure, and higher DRAM utilization. Stage 5 will begin only when explicitly requested.
+The repository now has a validated row-major GEMM ladder spanning naive, shared-tiled, coalesced, register-blocked, FP16-input, WMMA/Tensor Core, and matched cuBLAS paths. At 1,024², the strongest custom FP32 kernel measures `1.094704 ms` and `1,961.7 GFLOP/s` (`48.17%` of cuBLAS); WMMA measures `0.587264 ms` and `3,656.8 GFLOP/s` (`36.87%` of matched FP16 cuBLAS). cuBLAS remains faster in every controlled comparison. Stage 6 will begin only when explicitly requested.
 
 ## Goals
 
@@ -104,6 +104,7 @@ build\warpforge-device-info.exe
 build\warpforge-benchmark-vector-add.exe --size 1048576 --warmups 10 --iterations 100 --output benchmarks\results\vector_add.json
 build\warpforge-benchmark-memory.exe --size 16777216 --rows 2048 --columns 1536 --warmups 10 --iterations 100 --output-dir benchmarks\results\memory
 build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmups 10 --iterations 100 --output-dir benchmarks\results\reduction
+build\warpforge-benchmark-gemm.exe --sizes 256,512,1024,2048 --warmups 10 --iterations 100 --output-dir benchmarks\results\gemm
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -117,6 +118,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | `warpforge_benchmark_vector_add` | Runs CPU reference, CUDA validation, event timing, statistics, and JSON export |
 | `warpforge_benchmark_memory` | Runs Stage 3 block, stride, transpose, transfer, and stream experiments |
 | `warpforge_benchmark_reduction` | Validates and measures Stage 4 sum/maximum reduction variants |
+| `warpforge_benchmark_gemm` | Validates and measures custom FP32/FP16 GEMM and matched cuBLAS baselines |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
@@ -153,6 +155,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [VectorAdd validation baseline](docs/performance/vector_add.md)
 - [CUDA execution and memory engineering](docs/performance/memory.md)
 - [Parallel reduction engine](docs/performance/reduction.md)
+- [GEMM optimization ladder](docs/performance/gemm.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -459,3 +462,69 @@ Nsight Compute measured the first-pass DRAM bandwidth rising from `43.264 GB/s` 
 ### Next stage
 
 Stage 5 will define GEMM semantics and implement the CPU, custom CUDA, mixed-precision/Tensor Core experiment, and cuBLAS comparison ladder. It will not begin until explicitly requested.
+
+## Stage 5 completion report
+
+### Implemented
+
+- Row-major `C = A × B` problem, variant, backend, and dispatch contracts
+- Double-accumulation CPU reference for small-shape validation
+- Naive, 16 × 16 shared-tiled, 32 × 32 coalesced, and 64 × 64 register-blocked FP32 CUDA kernels
+- FP16-input/FP32-accumulation shared-tiled and WMMA Tensor Core kernels
+- Matched row-major cuBLAS FP32 and FP16-input baselines
+- Deterministic benchmark CLI, schema-v1 JSON, CSV summaries, and Nsight Compute evidence
+
+### Files
+
+- Public GEMM API in `include/warpforge/gemm.cuh`
+- Custom and cuBLAS dispatch in `src/kernels/gemm/gemm.cu`
+- Benchmark runner in `apps/benchmarks/gemm.cu`
+- CUDA correctness and Python result-contract tests
+- Forty measured JSON records across the report and 4,096 feasibility run
+- Profiler summary and `docs/performance/gemm.md`
+
+### Tests
+
+All 15 Release CTests pass. GEMM tests cover empty, 1 × 1, irregular rectangular, tile-boundary, and WMMA-compatible shapes; all custom variants; both cuBLAS datatypes; invalid pointers; and incompatible WMMA dimensions. All 40 persisted results pass the Stage 5 validator.
+
+### Benchmarks and measured results
+
+The main report uses code commit `f88127e`, seed `2027`, 50 warmups, and 100 samples at sizes 256–2,048. The 4,096 feasibility run uses 5 warmups and 20 samples because of cumulative runtime and thermal load.
+
+- strongest custom FP32 at 1,024: register blocked, `1.094704 ms`, `1,961.7 GFLOP/s`, `48.17%` of cuBLAS
+- matched FP32 cuBLAS at 1,024: `0.527360 ms`, `4,072.1 GFLOP/s`
+- custom WMMA at 1,024: `0.587264 ms`, `3,656.8 GFLOP/s`, `36.87%` of FP16 cuBLAS
+- matched FP16 cuBLAS at 1,024: `0.216512 ms`, `9,918.5 GFLOP/s`
+- 4,096 allocations and execution succeeded; register-blocked FP32 reached `1,378.0 GFLOP/s` and WMMA reached `2,011.8 GFLOP/s`
+- largest observed custom errors: `8.2016e-05` FP32 and `2.8801e-04` FP16-input, both within declared tolerances
+
+Nsight Compute confirms that register blocking cuts the 1,024 instrumented duration by nearly fivefold, but 56 registers per thread, uncoalesced stores, and shared-memory bank conflicts remain. WMMA activates the tensor pipeline, while low occupancy and long-scoreboard stalls show that its data movement is not yet competitive with cuBLAS.
+
+### Concepts learned
+
+- Shared tiles reduce redundant global loads; coalesced cooperative loading improves them further.
+- Register tiling increases arithmetic intensity but trades against register pressure and occupancy.
+- Tensor Core instructions alone do not guarantee library-level performance; tile reuse and pipeline design dominate.
+- CPU validation is practical for small shapes, while matched cuBLAS is the trusted reference for large matrices.
+- Library-relative claims require identical shapes, datatypes, accumulation, and timing boundaries.
+
+### Known limitations
+
+- Only square, contiguous, row-major `alpha=1`, `beta=0`, no-transpose GEMM is implemented.
+- Measurements cover one thermally constrained RTX 3050 Laptop GPU; clocks were not locked.
+- The main run ended at 83 C and the 4,096 attempt at 84 C, with unrelated background GPU utilization present.
+- WMMA requires all dimensions to be multiples of 16.
+- No asynchronous tile copy, double buffering, split-K, batching, autotuning, or compensated accumulation is implemented.
+
+### Commits
+
+- `f88127e feat(gemm): add CUDA optimization ladder and cuBLAS dispatch`
+- `bench(gemm): record Stage 5 cuBLAS comparisons` (this evidence and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Every implementation is correct under its declared policy; sizes 256–2,048 are measured; 4,096 was safely attempted; custom performance is reported as a percentage of matched cuBLAS; and the naive, strongest FP32, and Tensor Core kernels have profiler-backed explanations without claiming to beat cuBLAS.
+
+### Next stage
+
+Stage 6 will implement and validate Softmax, RMSNorm, RoPE, elementwise operations, SwiGLU support, and causal masking one coherent operation at a time. It will not begin until explicitly requested.

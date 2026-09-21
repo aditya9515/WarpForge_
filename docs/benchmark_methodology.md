@@ -164,6 +164,15 @@ Changing several optimization factors at once should be avoided because it weake
 - Reduction effective input bandwidth counts only the original logical input bytes. It is not presented as physical DRAM bandwidth and does not include intermediate-pass traffic.
 - Nsight Compute captures are separate, instrumented executions used for causal evidence. Their durations are never substituted for the uninstrumented report results.
 
+## Stage 5 GEMM timing and validation
+
+- GEMM semantics are row-major `C[M,N] = A[M,K] × B[K,N]`, `alpha=1`, `beta=0`, with FP32 output.
+- Small and irregular cases use a CPU reference with double-precision accumulation. Larger custom cases use the matched datatype/accumulation cuBLAS path as the trusted reference.
+- FP32 validation uses `atol = 1e-5 * max(1, ceil(log2(K)))`, `rtol = 1e-4`. FP16-input/FP32-accumulation uses `atol = 1e-3 * max(1, ceil(log2(K)))`, `rtol = 1e-2`.
+- GEMM throughput is `2*M*N*K / seconds`. Custom percentage of cuBLAS is custom GFLOP/s divided by the matched cuBLAS GFLOP/s for identical shape and input datatype.
+- CUDA events enclose exactly one custom or cuBLAS GEMM call. Allocation, transfers, reference construction, validation, and serialization remain outside the interval.
+- The 4,096 feasibility run may use fewer warmups/samples than the main report after explicit allocation and runtime checks; its statistics are labeled separately and never merged with the main run.
+
 ## Profiling workflow
 
 ### Nsight Systems

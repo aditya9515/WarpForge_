@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "operation": "gemm_fp32",
+    "implementation": "cublas_fp32",
+    "data_type": "fp32",
+    "timing_scope": "kernel-only",
+    "dimensions": {
+      "k": 4096,
+      "m": 4096,
+      "n": 4096
+    },
+    "launch": {
+      "grid": [1, 1, 1],
+      "block": [1, 1, 1],
+      "dynamic_shared_memory_bytes": 0
+    },
+    "gpu_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "compute_capability": "8.6",
+    "gpu_global_memory_bytes": 4294443008,
+    "cuda_driver_version": "13.4",
+    "cuda_runtime_version": "12.6",
+    "build_type": "Release",
+    "compiler": "MSVC 19.44.35228.0",
+    "git_commit": "f88127e",
+    "timestamp_utc": "2026-09-20T09:37:51Z"
+  },
+  "config": {
+    "warmup_iterations": 5,
+    "measurement_iterations": 20,
+    "seed": 2027
+  },
+  "statistics_ms": {
+    "sample_count": 20,
+    "minimum": 33.314815521240234,
+    "mean": 34.243209457397462,
+    "median": 34.175439834594727,
+    "p95": 35.031399345397951,
+    "standard_deviation": 0.57503015748726449
+  },
+  "correctness": {
+    "passed": true,
+    "element_count": 16777216,
+    "failure_count": 0,
+    "worst_index": 0,
+    "max_absolute_error": 0,
+    "mean_absolute_error": 0,
+    "max_relative_error": 0,
+    "expected_at_worst": 0,
+    "actual_at_worst": 0
+  },
+  "metrics": {
+    "absolute_tolerance": 0.00012000000000000002,
+    "cublas_median_ms": 34.175439834594727,
+    "flop_count": 137438953472,
+    "gflops_from_median": 4021.5708747916347,
+    "percent_of_cublas": 100,
+    "relative_tolerance": 0.0001,
+    "static_shared_memory_bytes": 0,
+    "validated_against_cpu": 0,
+    "validated_against_cublas": 0
+  },
+  "samples_ms": [34.303905487060547, 33.961887359619141, 33.623935699462891, 33.314815521240234, 34.046974182128906, 33.916927337646484, 33.644542694091797, 33.718273162841797, 33.930240631103516, 33.658878326416016, 33.628158569335938, 34.344959259033203, 35.018753051757812, 34.744319915771484, 34.964481353759766, 34.490367889404297, 34.579456329345703, 35.271678924560547, 34.896896362304688, 34.804737091064453]
+}
