@@ -126,6 +126,14 @@ set_target_properties(
 target_link_libraries(warpforge_benchmark_transformer PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_benchmark_transformer)
 
+add_executable(warpforge_benchmark_fusion apps/benchmarks/fusion.cpp)
+set_target_properties(
+    warpforge_benchmark_fusion
+    PROPERTIES OUTPUT_NAME "warpforge-benchmark-fusion"
+)
+target_link_libraries(warpforge_benchmark_fusion PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_benchmark_fusion)
+
 if(BUILD_TESTING)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
@@ -284,6 +292,26 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_transformer_results.py
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/transformer
     )
+    add_test(
+        NAME benchmark.fusion
+        COMMAND
+            warpforge_benchmark_fusion
+            --rows 37
+            --columns 53
+            --elements 4097
+            --pipeline-elements 4097
+            --chunks 5
+            --warmups 1
+            --iterations 3
+            --output-dir ${CMAKE_CURRENT_BINARY_DIR}/test-results/fusion
+    )
+    add_test(
+        NAME benchmark.fusion_json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_fusion_results.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/fusion
+    )
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
@@ -296,6 +324,7 @@ if(BUILD_TESTING)
     set_tests_properties(
         benchmark.vector_add benchmark.memory benchmark.reduction benchmark.gemm
         benchmark.transformer
+        benchmark.fusion
         PROPERTIES LABELS "cuda;benchmark"
     )
     set_tests_properties(
@@ -326,6 +355,12 @@ if(BUILD_TESTING)
         benchmark.transformer_json_valid
         PROPERTIES
             DEPENDS benchmark.transformer
+            LABELS "benchmark;schema"
+    )
+    set_tests_properties(
+        benchmark.fusion_json_valid
+        PROPERTIES
+            DEPENDS benchmark.fusion
             LABELS "benchmark;schema"
     )
 endif()

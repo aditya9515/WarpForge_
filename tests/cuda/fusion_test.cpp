@@ -6,6 +6,7 @@
 
 #include <cuda_runtime_api.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -36,6 +37,64 @@ public:
 
 private:
     float* pointer_{};
+};
+
+class PinnedBuffer final {
+public:
+    explicit PinnedBuffer(const std::size_t count) : count_(count) {
+        if (count > 0U) {
+            CUDA_CHECK(cudaMallocHost(
+                reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
+        }
+    }
+    ~PinnedBuffer() noexcept {
+        if (pointer_ != nullptr) {
+            cudaFreeHost(pointer_);
+        }
+    }
+    PinnedBuffer(const PinnedBuffer&) = delete;
+    PinnedBuffer& operator=(const PinnedBuffer&) = delete;
+    [[nodiscard]] float* get() const noexcept { return pointer_; }
+    [[nodiscard]] std::size_t size() const noexcept { return count_; }
+    [[nodiscard]] float& operator[](const std::size_t index) noexcept {
+        return pointer_[index];
+    }
+
+private:
+    float* pointer_{};
+    std::size_t count_{};
+};
+
+class Stream final {
+public:
+    Stream() { CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking)); }
+    ~Stream() noexcept {
+        if (stream_ != nullptr) {
+            cudaStreamDestroy(stream_);
+        }
+    }
+    Stream(const Stream&) = delete;
+    Stream& operator=(const Stream&) = delete;
+    [[nodiscard]] cudaStream_t get() const noexcept { return stream_; }
+
+private:
+    cudaStream_t stream_{};
+};
+
+class Event final {
+public:
+    Event() { CUDA_CHECK(cudaEventCreateWithFlags(&event_, cudaEventDisableTiming)); }
+    ~Event() noexcept {
+        if (event_ != nullptr) {
+            cudaEventDestroy(event_);
+        }
+    }
+    Event(const Event&) = delete;
+    Event& operator=(const Event&) = delete;
+    [[nodiscard]] cudaEvent_t get() const noexcept { return event_; }
+
+private:
+    cudaEvent_t event_{};
 };
 
 void require_valid(
@@ -210,6 +269,56 @@ void test_extreme_swiglu() {
     require_valid(expected, actual, {1.0e-5, 1.0e-5}, "extreme fused SwiGLU");
 }
 
+void test_two_stream_pipeline_ordering() {
+    constexpr std::size_t element_count = 1003U;
+    constexpr std::size_t chunk_count = 5U;
+    constexpr std::size_t chunk_capacity =
+        (element_count + chunk_count - 1U) / chunk_count;
+    PinnedBuffer input(element_count);
+    PinnedBuffer output(element_count);
+    std::vector<float> expected(element_count);
+    for (std::size_t index = 0U; index < element_count; ++index) {
+        input[index] = static_cast<float>(index % 127U) / 13.0F - 4.0F;
+    }
+    warpforge::silu_cpu(input.get(), expected.data(), expected.size());
+
+    std::array<Stream, 2> streams{};
+    std::array<Event, 2> completion_events{};
+    std::array<DeviceBuffer, 2> buffers{
+        DeviceBuffer{chunk_capacity}, DeviceBuffer{chunk_capacity}};
+    for (std::size_t chunk = 0U; chunk < chunk_count; ++chunk) {
+        const std::size_t stream_index = chunk % streams.size();
+        const std::size_t offset = chunk * chunk_capacity;
+        const std::size_t count = std::min(chunk_capacity, element_count - offset);
+        const std::size_t bytes = count * sizeof(float);
+        const cudaStream_t stream = streams[stream_index].get();
+        CUDA_CHECK(cudaMemcpyAsync(
+            buffers[stream_index].get(),
+            input.get() + offset,
+            bytes,
+            cudaMemcpyHostToDevice,
+            stream));
+        warpforge::silu_cuda(
+            buffers[stream_index].get(), buffers[stream_index].get(), count, 256U, stream);
+        CUDA_CHECK(cudaMemcpyAsync(
+            output.get() + offset,
+            buffers[stream_index].get(),
+            bytes,
+            cudaMemcpyDeviceToHost,
+            stream));
+    }
+    for (std::size_t stream_index = 0U; stream_index < streams.size(); ++stream_index) {
+        CUDA_CHECK(cudaEventRecord(
+            completion_events[stream_index].get(), streams[stream_index].get()));
+    }
+    for (const Event& event : completion_events) {
+        CUDA_CHECK(cudaEventSynchronize(event.get()));
+    }
+
+    const std::vector<float> actual(output.get(), output.get() + output.size());
+    require_valid(expected, actual, {1.0e-5, 1.0e-5}, "two-stream event pipeline");
+}
+
 void test_invalid_arguments() {
     bool invalid_epsilon = false;
     try {
@@ -265,6 +374,7 @@ int main() {
         run_swiglu_case(1003U, true, false);
         run_swiglu_case(1003U, false, true);
         test_extreme_swiglu();
+        test_two_stream_pipeline_ordering();
         test_invalid_arguments();
         std::cout << "Stage 7 fusion correctness tests passed\n";
         return EXIT_SUCCESS;
