@@ -53,6 +53,8 @@ add_library(
         src/kernels/gemm/gemm.cu
         src/kernels/memory/memory.cu
         src/kernels/reduction/reduction.cu
+        src/kernels/transformer/causal_mask.cu
+        src/kernels/transformer/elementwise.cu
         src/kernels/transformer/rmsnorm.cu
         src/kernels/transformer/rope.cu
         src/kernels/transformer/softmax.cu
@@ -159,6 +161,14 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_rope_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_rope_test)
 
+    add_executable(warpforge_elementwise_test tests/cuda/elementwise_test.cpp)
+    target_link_libraries(warpforge_elementwise_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_elementwise_test)
+
+    add_executable(warpforge_causal_mask_test tests/cuda/causal_mask_test.cpp)
+    target_link_libraries(warpforge_causal_mask_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_causal_mask_test)
+
     add_test(NAME cpu.validation COMMAND warpforge_validation_test)
     add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
@@ -169,6 +179,8 @@ if(BUILD_TESTING)
     add_test(NAME cuda.softmax COMMAND warpforge_softmax_test)
     add_test(NAME cuda.rmsnorm COMMAND warpforge_rmsnorm_test)
     add_test(NAME cuda.rope COMMAND warpforge_rope_test)
+    add_test(NAME cuda.elementwise COMMAND warpforge_elementwise_test)
+    add_test(NAME cuda.causal_mask COMMAND warpforge_causal_mask_test)
     add_test(
         NAME benchmark.vector_add
         COMMAND
@@ -242,6 +254,7 @@ if(BUILD_TESTING)
     set_tests_properties(
         cuda.vector_add cuda.memory cuda.reduction cuda.gemm cuda.softmax cuda.rmsnorm
         cuda.rope
+        cuda.elementwise cuda.causal_mask
         PROPERTIES LABELS "cuda;correctness"
     )
     set_tests_properties(
