@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 5 — GEMM Optimization Ladder: complete.**
+**Stage 6 — Transformer-Oriented CUDA Kernels: complete.**
 
-The repository now has a validated row-major GEMM ladder spanning naive, shared-tiled, coalesced, register-blocked, FP16-input, WMMA/Tensor Core, and matched cuBLAS paths. At 1,024², the strongest custom FP32 kernel measures `1.094704 ms` and `1,961.7 GFLOP/s` (`48.17%` of cuBLAS); WMMA measures `0.587264 ms` and `3,656.8 GFLOP/s` (`36.87%` of matched FP16 cuBLAS). cuBLAS remains faster in every controlled comparison. Stage 6 will begin only when explicitly requested.
+The repository now has validated FP32 Softmax, RMSNorm, interleaved RoPE, SiLU, add, multiply, scale, unfused SwiGLU, and causal-mask paths. At the report shapes, warp Softmax measures `0.200672 ms` (`5.353×` naive) and block RMSNorm measures `0.197504 ms` (`4.599×` naive). Every report record passes its declared tolerance. Stage 7 will begin only when explicitly requested.
 
 ## Goals
 
@@ -105,6 +105,7 @@ build\warpforge-benchmark-vector-add.exe --size 1048576 --warmups 10 --iteration
 build\warpforge-benchmark-memory.exe --size 16777216 --rows 2048 --columns 1536 --warmups 10 --iterations 100 --output-dir benchmarks\results\memory
 build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmups 10 --iterations 100 --output-dir benchmarks\results\reduction
 build\warpforge-benchmark-gemm.exe --sizes 256,512,1024,2048 --warmups 10 --iterations 100 --output-dir benchmarks\results\gemm
+build\warpforge-benchmark-transformer.exe --rows 4096 --columns 1024 --elements 16777216 --sequence 2048 --heads 8 --head-dim 64 --mask-length 512 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage6
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -119,6 +120,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | `warpforge_benchmark_memory` | Runs Stage 3 block, stride, transpose, transfer, and stream experiments |
 | `warpforge_benchmark_reduction` | Validates and measures Stage 4 sum/maximum reduction variants |
 | `warpforge_benchmark_gemm` | Validates and measures custom FP32/FP16 GEMM and matched cuBLAS baselines |
+| `warpforge_benchmark_transformer` | Validates and measures Stage 6 Transformer-oriented FP32 kernels |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
@@ -156,6 +158,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [CUDA execution and memory engineering](docs/performance/memory.md)
 - [Parallel reduction engine](docs/performance/reduction.md)
 - [GEMM optimization ladder](docs/performance/gemm.md)
+- [Transformer-oriented CUDA kernels](docs/performance/transformer_kernels.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -528,3 +531,76 @@ Nsight Compute confirms that register blocking cuts the 1,024 instrumented durat
 ### Next stage
 
 Stage 6 will implement and validate Softmax, RMSNorm, RoPE, elementwise operations, SwiGLU support, and causal masking one coherent operation at a time. It will not begin until explicitly requested.
+
+## Stage 6 completion report
+
+### Implemented
+
+- Stable row-wise Softmax with naive, shared-memory block, and warp-shuffle variants
+- RMSNorm with naive and cooperative block variants, FP32 device accumulation, and configurable epsilon
+- Interleaved-pair RoPE for contiguous `[batch, sequence, heads, head_dimension]` tensors, position offsets, and configurable base
+- SiLU, add, multiply, scale, and an explicit two-kernel unfused SwiGLU baseline
+- Standalone causal-mask support for contiguous `[batch, heads, query, key]` scores
+- Unified deterministic benchmark CLI, schema-v1 JSON records, CSV summary, and result validator
+
+### Files
+
+- Public APIs in `include/warpforge/softmax.cuh`, `rmsnorm.cuh`, `rope.cuh`, `elementwise.cuh`, and `causal_mask.cuh`
+- CUDA/CPU implementations under `src/kernels/transformer/`
+- Five focused correctness tests under `tests/cuda/`
+- Benchmark runner in `apps/benchmarks/transformer.cpp` and Python result-contract test
+- Twelve measured JSON records, summary CSV, and `docs/performance/transformer_kernels.md`
+
+### Tests
+
+All 22 Release CTests pass. Stage 6 coverage includes empty and tiny inputs, irregular and boundary widths, extreme Softmax logits, zero/near-zero RMSNorm values, long-position and invalid-dimension RoPE, elementwise and in-place aliasing rules, SwiGLU intermediate restrictions, mask boundaries and offsets, and the benchmark JSON contract.
+
+The initial full-size benchmark correctly failed at RoPE index 1,022,595 under the generic `1e-5` tolerance. Investigation traced the `1.96084e-4` difference to FP32 inverse-frequency rounding amplified at long positions. A 2,048-token regression case and explicit `atol=2.5e-4`, `rtol=1e-5` policy were added before results were accepted; the double-precision CPU reference was not weakened.
+
+### Benchmarks and measured results
+
+The report run used clean code commit `16c59a5`, seed `2027`, 50 warmups, and 500 CUDA-event samples for each of 12 cases on the RTX 3050 Laptop GPU.
+
+- warp Softmax: `0.200672 ms`, `167.210` logical GB/s, `5.353×` faster than naive
+- block Softmax: `0.222208 ms`, `151.005` logical GB/s, `4.834×` faster than naive
+- block RMSNorm: `0.197504 ms`, `254.839` logical GB/s, `4.599×` faster than naive
+- RoPE: `0.053248 ms`, `157.538` logical GB/s, maximum absolute error `1.96084e-4`
+- SiLU/add/multiply/scale: `0.736256–1.079072 ms` and `181.839–187.246` logical GB/s
+- unfused SwiGLU: `1.828864 ms`, including both launches and intermediate traffic
+- causal mask: `0.090112 ms`, `186.182` logical GB/s, exact agreement
+
+Allocation, transfers, CPU reference work, validation, and serialization are excluded from the event interval. Logical bandwidth is not measured DRAM traffic. All 12 JSON records contain 500 samples, zero failures, and code SHA `16c59a5`.
+
+### Concepts learned
+
+- Stable Softmax needs a row maximum before exponentiation even when the performance question is the reduction strategy.
+- Cooperative row reductions recover parallelism that one-thread-per-row baselines leave idle.
+- Warp shuffles reduce shared-memory coordination while retaining a small cross-warp summary.
+- Long-position RoPE needs a precision policy that accounts for FP32 frequency and angle rounding without changing the trusted reference.
+- An explicit unfused SwiGLU path establishes the traffic and launch baseline needed to judge Stage 7 fusion honestly.
+
+### Known limitations
+
+- Transformer primitives are FP32 only and were measured at one shape per operation family on one Windows laptop GPU.
+- Endpoint temperature rose from 80 C to 83 C; clocks were not locked.
+- Softmax/RMSNorm results are measured but not yet supported by focused Nsight Compute captures; that analysis belongs to Stage 11.
+- RoPE supports interleaved pairs only, causal masking is standalone, and SwiGLU remains deliberately unfused.
+- No attention orchestration, residual fusion, asynchronous pipeline, tensor abstraction, or MiniInfer block has been introduced.
+
+### Commits
+
+- `aa741b5 feat(transformer): add stable Softmax variants`
+- `c3a5b67 feat(transformer): add FP32 RMSNorm kernels`
+- `eac3e68 feat(transformer): add interleaved RoPE`
+- `9ad7108 feat(transformer): add elementwise SwiGLU and causal mask`
+- `83be964 feat(transformer): add Stage 6 benchmark suite`
+- `16c59a5 test(transformer): cover long-position RoPE precision`
+- `bench(transformer): record Stage 6 kernel results` (this evidence and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Every Stage 6 operation has a trusted reference, CUDA implementation, focused tests, a correctness-gated report benchmark, and documented numerical/performance limitations. Twelve report records pass validation with no fabricated or profiler-derived timing claims.
+
+### Next stage
+
+Stage 7 will compare separate and fused residual + RMSNorm and SiLU + multiply paths, account for logical memory traffic, inspect resource pressure, and revisit the pinned two-stream pipeline with explicit events. It will not begin until explicitly requested.

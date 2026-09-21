@@ -43,7 +43,7 @@ The design prioritizes:
               +-----------------------+  +------------------+
 ```
 
-Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder. Stage 5 adds row-major custom FP32/FP16 GEMM, WMMA, and cuBLAS backend dispatch. Transformer kernels and MiniInfer remain future work.
+Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder. Stage 5 adds row-major custom FP32/FP16 GEMM, WMMA, and cuBLAS backend dispatch. Stage 6 adds validated FP32 Softmax, RMSNorm, RoPE, elementwise, unfused SwiGLU, and causal-mask primitives. Fusion, runtime ownership, and MiniInfer composition remain later-stage work.
 
 ## Component responsibilities
 
@@ -53,7 +53,7 @@ References define trusted behavior before a custom GPU implementation is optimiz
 
 ### Custom kernel library
 
-The custom-kernel layer will contain focused implementations for:
+The custom-kernel layer contains focused implementations for:
 
 - vector and memory-access experiments;
 - sum and maximum reductions;
@@ -162,7 +162,7 @@ When implementation begins:
 - no unconditional device-wide synchronization is placed in a performance-sensitive path merely for convenience;
 - matrix multiplication exposes a small backend choice between custom CUDA and cuBLAS without leaking backend-specific state into MiniInfer orchestration.
 
-Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused memory launch APIs. Stage 4 adds selectable multi-pass reduction. Stage 5 adds `GemmProblem`, `GemmVariant`, `GemmBackend`, `GemmDispatch`, sizing/tolerance helpers, CPU reference, and FP32/FP16 launch functions. GEMM calls accept explicit CUDA streams and an externally owned cuBLAS handle so allocation and library state remain visible. Later APIs remain deferred until the stage that implements and tests them.
+Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused memory launch APIs. Stage 4 adds selectable multi-pass reduction. Stage 5 adds `GemmProblem`, `GemmVariant`, `GemmBackend`, `GemmDispatch`, sizing/tolerance helpers, CPU reference, and FP32/FP16 launch functions. GEMM calls accept explicit CUDA streams and an externally owned cuBLAS handle so allocation and library state remain visible. Stage 6 adds `SoftmaxVariant`, `RmsNormVariant`, `RopeProblem`, `CausalMaskProblem`, CPU references, elementwise/SwiGLU entry points, and explicit-stream CUDA launch functions. Transformer data remains raw contiguous pointers plus dimensions so Stage 8 can introduce views and ownership without hiding Stage 6 costs.
 
 ## Stage boundaries
 
@@ -190,7 +190,8 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 ## Current limitations
 
 - The foundation has been compiled and run only on the audited Windows configuration.
-- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, VectorAdd, memory kernels, reduction, and row-major GEMM with custom/cuBLAS dispatch; Transformer kernels remain deferred.
+- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, VectorAdd, memory kernels, reduction, row-major GEMM with custom/cuBLAS dispatch, and the Stage 6 FP32 Transformer primitives.
 - GEMM currently supports contiguous no-transpose matrices with `alpha=1`, `beta=0`, and FP32 output; it is deliberately not a general BLAS wrapper.
-- Linux, WSL2, PyTorch, cuBLAS, and TensorRT paths remain planned but unvalidated.
+- Transformer kernels use explicit contiguous pointers/dimensions and do not yet provide tensor ownership, fusion, attention orchestration, or FP16 variants.
+- Linux, WSL2, PyTorch, and TensorRT paths remain planned but unvalidated; cuBLAS is validated only for the Stage 5 Windows GEMM path.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.

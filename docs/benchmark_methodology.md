@@ -173,6 +173,17 @@ Changing several optimization factors at once should be avoided because it weake
 - CUDA events enclose exactly one custom or cuBLAS GEMM call. Allocation, transfers, reference construction, validation, and serialization remain outside the interval.
 - The 4,096 feasibility run may use fewer warmups/samples than the main report after explicit allocation and runtime checks; its statistics are labeled separately and never merged with the main run.
 
+## Stage 6 Transformer-kernel timing and validation
+
+- Stable Softmax uses a CPU double-precision `exp(x - max)` reference and FP32 CUDA implementations. Validation starts at `atol=1e-5`, `rtol=1e-5` and additionally checks finite outputs and row sums in the focused tests.
+- RMSNorm uses double-precision CPU sum-of-squares and FP32 device accumulation. Its tolerance is `atol = 1e-5 * max(1, ceil(log2(width)))`, `rtol = 1e-5`.
+- RoPE uses a double-precision CPU angle/trigonometric reference. Short-position cases use `1e-5`/`1e-5`; the declared 2,048-token report and regression use `atol=2.5e-4`, `rtol=1e-5` because FP32 inverse-frequency rounding is amplified by long positions before trigonometric range reduction. The initial generic-tolerance failure and observed error are preserved in the performance journal.
+- SiLU, add, multiply, scale, and unfused SwiGLU use `atol=1e-5`, `rtol=1e-5`. The causal mask requires exact agreement, including negative infinity at masked locations.
+- CUDA events enclose one kernel for each ordinary case. Unfused SwiGLU deliberately encloses both the SiLU and multiply launches; the intermediate allocation and host/device transfers remain outside the interval.
+- Effective bandwidth counts logical FP32 arrays touched by the algorithm. It counts two arrays for Softmax/RoPE/SiLU/scale/mask, three for RMSNorm/add/multiply, and five across unfused SwiGLU's two launches. These counts are not physical DRAM-transaction measurements.
+- Speedup is reported only within the same operation: naive Softmax and naive RMSNorm are their respective baselines. Single-implementation cases report `1.0` rather than implying comparison with another primitive.
+- Stage 6 report runs use 50 warmups and 500 samples per case. Correctness is checked once before timing, and each result retains every sample plus the clean implementation commit.
+
 ## Profiling workflow
 
 ### Nsight Systems
