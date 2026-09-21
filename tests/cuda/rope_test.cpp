@@ -36,7 +36,10 @@ private:
     float* pointer_{};
 };
 
-void run_case(const warpforge::RopeProblem& problem, const bool in_place = false) {
+void run_case(
+    const warpforge::RopeProblem& problem,
+    const bool in_place = false,
+    const warpforge::Tolerance tolerance = {1.0e-5, 1.0e-5}) {
     const std::size_t count = warpforge::rope_element_count(problem);
     std::vector<float> input(count);
     std::mt19937 generator(
@@ -61,8 +64,8 @@ void run_case(const warpforge::RopeProblem& problem, const bool in_place = false
         CUDA_CHECK(cudaMemcpy(
             actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
     }
-    const auto validation = warpforge::validate_fp32(
-        expected.data(), actual.data(), count, {1.0e-5, 1.0e-5});
+    const auto validation =
+        warpforge::validate_fp32(expected.data(), actual.data(), count, tolerance);
     if (!validation.passed) {
         throw std::runtime_error(
             "RoPE failed at index " + std::to_string(validation.worst_index) +
@@ -118,6 +121,8 @@ int main() {
         for (const auto& problem : problems) {
             run_case(problem);
         }
+        // Large positions amplify FP32 frequency rounding before sin/cos range reduction.
+        run_case({1U, 2048U, 8U, 64U, 17U, 10000.0F}, false, {2.5e-4, 1.0e-5});
         run_case({1U, 7U, 2U, 16U, 4U, 10000.0F}, true);
         test_position_layout();
         test_invalid_arguments();
