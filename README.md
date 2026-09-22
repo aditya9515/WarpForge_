@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 9 — MiniInfer single Transformer block: complete.**
+**Stage 10 — NVIDIA library and framework baselines: complete.**
 
-The repository now runs one deterministic FP32 pre-norm LLaMA-style block with reusable weights/workspace and selectable custom or cuBLAS projection GEMMs. A pinned CPU-PyTorch reference fixture validates all 18 named intermediates for both backends. All 31 tests pass, the full 128-token report has 500 measured samples per backend/scope, and Compute Sanitizer reports zero errors and zero leaked bytes for the focused MiniInfer path. Stage 10 will begin only when explicitly requested.
+The deterministic MiniInfer block now has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. All 31 tests pass, PyTorch validates every named intermediate, both TensorRT engines validate before timing, and ten report records contain 500 measured samples from one clean code commit. Stage 11 will begin only when explicitly requested.
 
 ## Goals
 
@@ -107,12 +107,14 @@ build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmu
 build\warpforge-benchmark-gemm.exe --sizes 256,512,1024,2048 --warmups 10 --iterations 100 --output-dir benchmarks\results\gemm
 build\warpforge-benchmark-transformer.exe --rows 4096 --columns 1024 --elements 16777216 --sequence 2048 --heads 8 --head-dim 64 --mask-length 512 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage6
 build\warpforge-benchmark-fusion.exe --rows 4096 --columns 1024 --elements 16777216 --pipeline-elements 16777216 --chunks 8 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage7
-build\warpforge-miniinfer.exe --fixture-dir benchmarks\fixtures\miniinfer_full --backend all --warmups 50 --iterations 500 --output-dir benchmarks\results\stage9
+build\warpforge-miniinfer.exe --fixture-dir benchmarks\fixtures\miniinfer_full --backend all --warmups 50 --iterations 500 --output-dir benchmarks\results\stage10\native
 compute-sanitizer --tool memcheck --leak-check full --error-exitcode 99 build\warpforge_runtime_test.exe --skip-allocation-failure
 compute-sanitizer --tool memcheck --leak-check full build\warpforge_miniinfer_test.exe tests\fixtures\miniinfer_small
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
+
+The approved Stage 10 Python/TensorRT environment is repository-local and ignored. Its exact packages, ONNX/engine build commands, validation-first sequence, and `trtexec` timing commands are documented in [the baseline report](docs/performance/baselines.md#reproduction).
 
 ## Build targets
 
@@ -151,6 +153,8 @@ The Stage 0 audit was performed on 2026-09-20.
 | MSVC | 19.44.35228 and 19.51.36256 installed; `cl` not on the normal PowerShell `PATH` |
 | CMake | 4.3.1-msvc1 bundled with Visual Studio; not available on `PATH` |
 | Git | 2.53.0.windows.2 |
+| Stage 10 Python | CPython 3.12.13, NumPy 2.3.3, PyTorch 2.14.0+cu126, ONNX 1.16.0 |
+| TensorRT | 10.7.0.23 Windows CUDA 12.6 SDK and `trtexec` |
 
 The CUDA Toolkit version and the maximum CUDA version reported by the driver are different concepts. Builds in this project are currently governed by the installed CUDA 12.6 Toolkit.
 
@@ -169,6 +173,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [Fusion and asynchronous execution](docs/performance/fusion.md)
 - [WarpForge GPU runtime](docs/performance/runtime.md)
 - [MiniInfer single Transformer block](docs/performance/miniinfer.md)
+- [MiniInfer library and framework baselines](docs/performance/baselines.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -820,3 +825,74 @@ cuBLAS is `1.793×` faster than the custom backend by device-resident median at 
 ### Next stage
 
 Stage 10 will compare the identical block against PyTorch CUDA and preserve the custom/cuBLAS block-level baseline. A compatible TensorRT/ONNX path will be attempted only after a separate installation approval; otherwise any exact compatibility blocker will be documented as partial. Stage 10 will not begin until explicitly requested.
+
+## Stage 10 completion report
+
+### Implemented
+
+- Equivalent eager PyTorch CPU/CUDA MiniInfer module using the Stage 9 fixture and all 18 named validation boundaries
+- CUDA-event device-resident and host-clock pageable-transfer PyTorch measurements
+- Fixed-shape opset-17 ONNX export with checker, shape, hash, and custom-domain validation
+- TensorRT 10.7 FP32 and supported mixed-FP16 engine builds with mandatory output validation before timing
+- `trtexec` trace normalization, common result metadata, and a ten-record cross-backend result assembler
+- Separate repository-local dependency lock and ignored Python/SDK/generated-artifact locations
+
+### Files
+
+- Equivalent model, PyTorch benchmark, ONNX exporter, TensorRT validator, trace normalizer, and result assembler under `python/`
+- Exact Stage 10 Python package versions in `python/requirements-stage10.lock`
+- Ten per-sample benchmark records, two TensorRT validation records, the ONNX manifest, and combined summary under `benchmarks/results/stage10/`
+- Detailed compatibility, methodology, correctness, timing, memory, and limitation analysis in `docs/performance/baselines.md`
+- Updated requirements and architecture documentation
+
+### Tests and correctness
+
+All 31 Release CTests pass after rebuilding clean implementation commit `f637452`. PyTorch CPU reconstructs the fixture exactly; PyTorch CUDA validates all 18 intermediates with maximum absolute error `1.788139e-6`. Native custom and cuBLAS paths again pass all intermediates with maxima `3.099442e-6` and `2.145767e-6`.
+
+The 111-node, standard-domain-only ONNX graph passes ONNX 1.16 checking. TensorRT output validation runs before `trtexec`: FP32 has maximum absolute error `7.152557e-7`, and mixed FP16 has `5.970299e-4`, both with zero failures. The result assembler confirms ten records, 500 samples each, seed `2027`, fixed dimensions, passing correctness, and a shared code SHA.
+
+### Benchmarks and measured results
+
+The report uses clean code commit `f637452` on the RTX 3050 Laptop GPU. Native and PyTorch records use 50 warmups and 500 samples; TensorRT uses its duration-based 200 ms warmup, observed to execute at least 304 queries, then exports exactly 500 samples.
+
+- custom FP32 device-resident sequence: median `1.350656 ms`, p95 `1.760472 ms`, `94,769` tokens/s
+- cuBLAS FP32 device-resident sequence: median `0.746400 ms`, p95 `0.848013 ms`, `171,490` tokens/s
+- PyTorch eager FP32 device-resident sequence: median `1.298944 ms`, p95 `2.028168 ms`, `98,542` tokens/s
+- TensorRT FP32 GPU compute: median `0.311310 ms`, p95 `0.607546 ms`, `411,166` tokens/s
+- TensorRT mixed-FP16 GPU compute: median `0.233490 ms`, p95 `0.324615 ms`, `548,203` tokens/s
+
+At this fixed shape, cuBLAS makes the native block `1.810x` faster than the custom-GEMM path. TensorRT FP32 is `2.398x` faster than the native cuBLAS sequence by median GPU work, and its mixed-FP16 engine is another `1.333x` faster than TensorRT FP32. These are measured whole-path results on this machine, not universal backend claims.
+
+Transfer-inclusive medians are `1.512300 ms` custom, `0.899000 ms` cuBLAS, and `1.298050 ms` PyTorch using a host-clock H2D/forward/D2H/completion boundary. TensorRT reports `0.348389 ms` FP32 and `0.281502 ms` mixed FP16 for GPU H2D + compute + D2H; those exclude host enqueue and are documented separately rather than presented as directly equivalent end-to-end measurements.
+
+### Concepts learned
+
+- Framework equivalence is strongest when the same binary fixture validates every semantic boundary before timing.
+- An ONNX checker pass is necessary but insufficient; the serialized TensorRT engine must execute and match the trusted output.
+- Device-resident, host-clock transfer-inclusive, and tool-local GPU latency answer different questions and cannot be collapsed into one unlabeled number.
+- TensorRT's graph-wide optimization can materially outperform an explicit kernel sequence without implying that one individual custom kernel is the bottleneck.
+- Mixed FP16 is a policy, not proof that every operation is FP16; TensorRT can retain FP32 for sensitive reductions and uses FP32 graph I/O here.
+- Memory figures from a custom workspace, a framework allocator, and a serialized engine describe different ownership boundaries.
+
+### Known limitations
+
+- Results cover one fixed single-block shape, batch 1, one Windows laptop GPU, and unlocked clocks; several p95 values show substantial variability.
+- PyTorch is eager only. There is no `torch.compile`, CUDA Graph, AMP, batching, or multi-block comparison.
+- TensorRT engines are fixed-shape and platform-specific generated artifacts. There is no dynamic shape, custom plugin, C++ runtime integration, or comprehensive process-peak memory measurement.
+- TensorRT mixed FP16 uses FP32 input/output and may retain FP32 layers; it is not a pure-FP16 graph.
+- TensorRT transfer-inclusive traces exclude host enqueue, while native/PyTorch end-to-end records include host dispatch and completion.
+- No direct cuDNN benchmark was added because no standalone primitive matched the complete block comparison.
+- Stage 10 records timing evidence only; bottleneck classifications require Stage 11 profiler evidence.
+
+### Commits
+
+- `f637452 feat(baselines): add PyTorch and TensorRT paths`
+- `docs(baselines): record Stage 10 comparisons` (this measured-result and completion-report commit)
+
+### Definition of Done
+
+**PASS.** CPU/PyTorch reconstruction, PyTorch CUDA, native custom/cuBLAS, TensorRT FP32, and supported mixed-FP16 correctness all pass. The fixed graph uses standard ONNX operators, TensorRT engines were validated before measurement, every result preserves samples and timing boundaries from one clean code commit, and compatibility/limitations are documented without unsupported cuDNN or TensorRT claims.
+
+### Next stage
+
+Stage 11 will run reproducible Nsight Compute sessions for baseline/optimized reduction, GEMM, Softmax, and RMSNorm, plus Nsight Systems on MiniInfer. It will connect each bottleneck classification and optimization conclusion to concrete profiler evidence. It will not begin until explicitly requested.

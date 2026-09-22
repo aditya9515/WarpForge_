@@ -1,0 +1,11 @@
+schema_version,file,backend,data_type,timing_scope,median_ms,p95_ms,tokens_per_second,max_absolute_error,validation_passed,git_commit
+1,native/miniinfer_custom_kernel,custom,fp32,kernel-sequence-device-resident,1.3506560325622559,1.7604719698429105,94768.76193058434,3.0994415283203125e-06,true,f637452
+1,native/miniinfer_custom_end_to_end,custom,fp32,end-to-end-h2d-forward-d2h,1.5123,2.0202099999999996,84639.29114593666,3.0994415283203125e-06,true,f637452
+1,native/miniinfer_cublas_kernel,cublas,fp32,kernel-sequence-device-resident,0.746399998664856,0.8480128169059752,171489.81809882584,2.1457672119140625e-06,true,f637452
+1,native/miniinfer_cublas_end_to_end,cublas,fp32,end-to-end-h2d-forward-d2h,0.899,1.1110499999999992,142380.42269187985,2.1457672119140625e-06,true,f637452
+1,pytorch/miniinfer_pytorch_cuda_kernel,pytorch_cuda_eager,fp32,kernel-sequence-device-resident,1.2989439964294434,2.0281679272651654,98541.58481955212,1.7881393432617188e-06,true,f637452
+1,pytorch/miniinfer_pytorch_cuda_end_to_end,pytorch_cuda_eager,fp32,end-to-end-h2d-forward-d2h,1.2980499996047001,2.1189699984461186,98609.4526705291,1.7881393432617188e-06,true,f637452
+1,tensorrt/miniinfer_tensorrt_fp32_kernel,tensorrt_trtexec,fp32,gpu-compute-device-resident,0.31131,0.6075456999999996,411165.71905817353,7.152557373046875e-07,true,f637452
+1,tensorrt/miniinfer_tensorrt_fp32_transfer,tensorrt_trtexec,fp32,gpu-h2d-compute-d2h,0.348389,0.4048618,367405.40028531326,7.152557373046875e-07,true,f637452
+1,tensorrt/miniinfer_tensorrt_fp16_kernel,tensorrt_trtexec,fp16,gpu-compute-device-resident,0.23349,0.324615,548203.3491798363,0.0005970299243927002,true,f637452
+1,tensorrt/miniinfer_tensorrt_fp16_transfer,tensorrt_trtexec,fp16,gpu-h2d-compute-d2h,0.2815015,0.32532925,454704.50423887616,0.0005970299243927002,true,f637452

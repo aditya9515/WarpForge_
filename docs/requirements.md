@@ -40,6 +40,8 @@ WarpForge must:
 | Git | 2.53.0.windows.2 | Available |
 | System Python | 3.13.14 | Available |
 | Stage 9 fixture environment | CPython 3.12.13, NumPy 2.3.3, PyTorch 2.14.0+cpu | Repository-local `.venv`; exact packages locked |
+| Stage 10 baseline environment | CPython 3.12.13, NumPy 2.3.3, PyTorch 2.14.0+cu126, ONNX 1.16.0 | Repository-local `.venv-stage10`; exact packages locked |
+| TensorRT | 10.7.0.23 Windows CUDA 12.6 SDK and `trtexec` | Repository-local `.stage10-tools`; validated, ignored by Git |
 | Docker CLI | 29.6.2 | Available; daemon not validated in Stage 0 |
 
 Dynamic observations such as temperature, utilization, running processes, and current memory usage are intentionally excluded because they are not stable environment requirements.
@@ -71,7 +73,13 @@ These are diagnosed prerequisites, not evidence that the CUDA Toolkit itself is 
 
 The approved Stage 9 reference environment is isolated in the ignored repository-local `.venv`. It uses uv-managed CPython 3.12.13 because the normal shell's Python 3.13 installation was outside the supported Windows range documented for the selected PyTorch wheel. NumPy 2.3.3 and CPU-only PyTorch 2.14.0 are pinned with their transitive dependencies in `python/requirements-stage9.lock`.
 
-This environment generates and verifies deterministic binary fixtures only. It does not download a model, alter the global Python installation, or provide a PyTorch CUDA performance baseline. A CUDA-enabled PyTorch environment and TensorRT remain separate Stage 10 dependencies that require explicit approval.
+This environment generates and verifies deterministic binary fixtures only. It does not download a model or alter the global Python installation.
+
+### Stage 10 baseline environment
+
+After explicit approval, Stage 10 created a separate ignored `.venv-stage10` using CPython 3.12.13. It contains NumPy 2.3.3, the official PyTorch 2.14.0 CUDA 12.6 wheel, ONNX 1.16.0, and the TensorRT 10.7 Python wheel from NVIDIA's Windows CUDA 12.6 SDK archive. Exact direct and transitive Python versions are recorded in `python/requirements-stage10.lock`.
+
+The ignored `.stage10-tools` directory contains TensorRT 10.7.0.23 and `trtexec`; no system-wide `PATH` change was made. The selected archive targets the installed CUDA 12.6 Toolkit. TensorRT 10.7 parses the fixed opset-17 graph, and both its FP32 and supported mixed-FP16 engines pass output validation on the RTX 3050 before timing. The generated ONNX model and serialized engines are ignored because they are reproducible, platform-specific artifacts.
 
 ## Supported and planned environments
 

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "precision": "fp16",
+  "tensorrt_version": "10.7.0",
+  "engine_file": "miniinfer_fp16.plan",
+  "engine_sha256": "7722402acc86b7a4f4dc78f1c3736c843f6c3193533b64916d0f6344d975be4b",
+  "engine_bytes": 14384316,
+  "engine_device_memory_bytes": 3145728,
+  "input_name": "input",
+  "input_shape": [
+    1,
+    128,
+    512
+  ],
+  "input_dtype": "DataType.FLOAT",
+  "output_name": "output",
+  "output_shape": [
+    1,
+    128,
+    512
+  ],
+  "output_dtype": "DataType.FLOAT",
+  "absolute_tolerance": 0.01,
+  "relative_tolerance": 0.01,
+  "correctness": {
+    "passed": true,
+    "element_count": 65536,
+    "failure_count": 0,
+    "worst_index": 85,
+    "max_absolute_error": 0.0005970299243927002,
+    "mean_absolute_error": 5.4297971169958714e-05,
+    "max_relative_error": 0.02436128923073477,
+    "expected_at_worst": -0.34164249897003174,
+    "actual_at_worst": -0.34223952889442444
+  }
+}
