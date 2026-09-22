@@ -333,7 +333,7 @@ RecordedResult benchmark_case(
         device_a_fp16.get(), {problem.m, problem.k}, warpforge::DType::fp16};
     const warpforge::TensorView b_fp16{
         device_b_fp16.get(), {problem.k, problem.n}, warpforge::DType::fp16};
-    const warpforge::TensorView output{
+    warpforge::TensorView output{
         device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
     auto launch = [&](const cudaStream_t launch_stream) {
         if (definition.fp16_input) {
@@ -568,7 +568,7 @@ int main(int argument_count, char** arguments) {
                 device_a_fp16.get(), {problem.m, problem.k}, warpforge::DType::fp16};
             const warpforge::TensorView b_fp16{
                 device_b_fp16.get(), {problem.k, problem.n}, warpforge::DType::fp16};
-            const warpforge::TensorView output{
+            warpforge::TensorView output{
                 device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
             warpforge::gemm_cuda(
                 a_fp32,

@@ -269,8 +269,9 @@ void test_gemm_backend_dispatch() {
     expect_throw<std::invalid_argument>(
         [&] {
             warpforge::Tensor wrong(warpforge::TensorShape{problem.m, problem.n - 1U}, warpforge::DType::fp32);
+            auto wrong_view = wrong.view();
             warpforge::gemm_cuda(
-                a.view(), b.view(), wrong.view(), problem, {}, nullptr, stream.native_handle());
+                a.view(), b.view(), wrong_view, problem, {}, nullptr, stream.native_handle());
         },
         "GEMM dispatch accepted a mismatched output view");
 }

@@ -53,6 +53,7 @@ add_library(
         src/kernels/gemm/gemm.cu
         src/kernels/memory/memory.cu
         src/kernels/reduction/reduction.cu
+        src/kernels/transformer/attention.cu
         src/kernels/transformer/causal_mask.cu
         src/kernels/transformer/elementwise.cu
         src/kernels/transformer/fusion.cu
@@ -60,6 +61,8 @@ add_library(
         src/kernels/transformer/rope.cu
         src/kernels/transformer/softmax.cu
         src/kernels/vector/vector_add.cu
+        src/miniinfer/fixture.cpp
+        src/miniinfer/miniinfer.cu
         src/runtime/device.cu
         src/runtime/runtime.cu
         src/validation.cpp
@@ -135,6 +138,11 @@ set_target_properties(
 target_link_libraries(warpforge_benchmark_fusion PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_benchmark_fusion)
 
+add_executable(warpforge_miniinfer apps/miniinfer/main.cpp)
+set_target_properties(warpforge_miniinfer PROPERTIES OUTPUT_NAME "warpforge-miniinfer")
+target_link_libraries(warpforge_miniinfer PRIVATE WarpForge::warpforge)
+warpforge_enable_warnings(warpforge_miniinfer)
+
 if(BUILD_TESTING)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 
@@ -195,6 +203,14 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_fusion_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_fusion_test)
 
+    add_executable(warpforge_attention_test tests/cuda/attention_test.cpp)
+    target_link_libraries(warpforge_attention_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_attention_test)
+
+    add_executable(warpforge_miniinfer_test tests/cuda/miniinfer_test.cpp)
+    target_link_libraries(warpforge_miniinfer_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_miniinfer_test)
+
     add_test(NAME cpu.validation COMMAND warpforge_validation_test)
     add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
@@ -209,6 +225,20 @@ if(BUILD_TESTING)
     add_test(NAME cuda.elementwise COMMAND warpforge_elementwise_test)
     add_test(NAME cuda.causal_mask COMMAND warpforge_causal_mask_test)
     add_test(NAME cuda.fusion COMMAND warpforge_fusion_test)
+    add_test(NAME cuda.attention COMMAND warpforge_attention_test)
+    add_test(
+        NAME cuda.miniinfer
+        COMMAND
+            warpforge_miniinfer_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/miniinfer_small
+    )
+    add_test(
+        NAME fixture.miniinfer_small
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_miniinfer_fixture.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/miniinfer_small
+    )
     add_test(
         NAME benchmark.vector_add
         COMMAND
@@ -318,6 +348,23 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_fusion_results.py
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/fusion
     )
+    add_test(
+        NAME benchmark.miniinfer
+        COMMAND
+            warpforge_miniinfer
+            --fixture-dir ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/miniinfer_small
+            --backend all
+            --warmups 1
+            --iterations 3
+            --output-dir ${CMAKE_CURRENT_BINARY_DIR}/test-results/miniinfer
+    )
+    add_test(
+        NAME benchmark.miniinfer_json_valid
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_miniinfer_results.py
+            ${CMAKE_CURRENT_BINARY_DIR}/test-results/miniinfer
+    )
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
@@ -325,13 +372,15 @@ if(BUILD_TESTING)
     set_tests_properties(
         cuda.vector_add cuda.memory cuda.reduction cuda.gemm cuda.softmax cuda.rmsnorm
         cuda.rope
-        cuda.elementwise cuda.causal_mask cuda.fusion
+        cuda.elementwise cuda.causal_mask cuda.fusion cuda.attention cuda.miniinfer
         PROPERTIES LABELS "cuda;correctness"
     )
+    set_tests_properties(fixture.miniinfer_small PROPERTIES LABELS "fixture;python")
     set_tests_properties(
         benchmark.vector_add benchmark.memory benchmark.reduction benchmark.gemm
         benchmark.transformer
         benchmark.fusion
+        benchmark.miniinfer
         PROPERTIES LABELS "cuda;benchmark"
     )
     set_tests_properties(
@@ -368,6 +417,12 @@ if(BUILD_TESTING)
         benchmark.fusion_json_valid
         PROPERTIES
             DEPENDS benchmark.fusion
+            LABELS "benchmark;schema"
+    )
+    set_tests_properties(
+        benchmark.miniinfer_json_valid
+        PROPERTIES
+            DEPENDS benchmark.miniinfer
             LABELS "benchmark;schema"
     )
 endif()

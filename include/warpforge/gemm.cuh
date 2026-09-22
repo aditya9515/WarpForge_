@@ -78,7 +78,7 @@ void gemm_fp16_cuda(
 void gemm_cuda(
     const TensorView& a,
     const TensorView& b,
-    TensorView c,
+    TensorView& c,
     const GemmProblem& problem,
     GemmDispatch dispatch,
     cublasHandle_t cublas_handle = nullptr,

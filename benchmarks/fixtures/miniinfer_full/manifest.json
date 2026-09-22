@@ -1,0 +1,386 @@
+{
+  "config": {
+    "attention_heads": 8,
+    "batch": 1,
+    "head_dimension": 64,
+    "hidden_size": 512,
+    "intermediate_size": 1536,
+    "position_offset": 0,
+    "rms_norm_epsilon": 1e-05,
+    "rope_base": 10000.0,
+    "sequence": 128
+  },
+  "generator": {
+    "numpy": "2.3.3",
+    "python": "3.12.13",
+    "torch": "2.14.0+cpu",
+    "torch_cuda": null
+  },
+  "preset": "full",
+  "schema_version": 1,
+  "seed": 2027,
+  "tensors": {
+    "attention_context": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "attention_context.bin",
+      "role": "intermediate",
+      "sha256": "05755c6b076c5788d617cf2a7ef2a2e1a7b95dfae1f4cc8920f5e3178a6dd0f5",
+      "shape": [
+        1,
+        128,
+        8,
+        64
+      ]
+    },
+    "attention_norm_weight": {
+      "byte_count": 2048,
+      "dtype": "fp32-le",
+      "element_count": 512,
+      "file": "attention_norm_weight.bin",
+      "role": "weight",
+      "sha256": "121b1f6333d4435dca0f56b5ac694fa213e5d277106cb51f9d2101f9fe014927",
+      "shape": [
+        512
+      ]
+    },
+    "attention_output": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "attention_output.bin",
+      "role": "intermediate",
+      "sha256": "8516418bdbd33cee618b8d202df454e722395d6891224b1874dba00af9acc6bd",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "attention_probabilities": {
+      "byte_count": 524288,
+      "dtype": "fp32-le",
+      "element_count": 131072,
+      "file": "attention_probabilities.bin",
+      "role": "intermediate",
+      "sha256": "abcc067e5a77011160e1ca8cfb52d2babafc4bb9f9c19a4a824f5dae231b04db",
+      "shape": [
+        1,
+        8,
+        128,
+        128
+      ]
+    },
+    "attention_residual": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "attention_residual.bin",
+      "role": "intermediate",
+      "sha256": "c1c32f3c4d09cf9dcb6ade2d61da3cfc7e59eaf7a5a51b18af9e4aae61021697",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "attention_scores": {
+      "byte_count": 524288,
+      "dtype": "fp32-le",
+      "element_count": 131072,
+      "file": "attention_scores.bin",
+      "role": "intermediate",
+      "sha256": "4202a9fdca9af49f61559e9c50e792916be89861db8e1e4cfb90f04d461ce9a6",
+      "shape": [
+        1,
+        8,
+        128,
+        128
+      ]
+    },
+    "down_weight": {
+      "byte_count": 3145728,
+      "dtype": "fp32-le",
+      "element_count": 786432,
+      "file": "down_weight.bin",
+      "role": "weight",
+      "sha256": "47f47203f50be29456112ebe3a4962a2502a3414bc0b070a65ab707a5a1f9552",
+      "shape": [
+        1536,
+        512
+      ]
+    },
+    "ffn_norm_weight": {
+      "byte_count": 2048,
+      "dtype": "fp32-le",
+      "element_count": 512,
+      "file": "ffn_norm_weight.bin",
+      "role": "weight",
+      "sha256": "a9e8f1391ca028021f1a7d3b62edc66e220f0123b3d80d2eb3117a6e63e0fe2e",
+      "shape": [
+        512
+      ]
+    },
+    "gate_weight": {
+      "byte_count": 3145728,
+      "dtype": "fp32-le",
+      "element_count": 786432,
+      "file": "gate_weight.bin",
+      "role": "weight",
+      "sha256": "075bb5615ffb331a1fe17b8508ba7b1b679cc3575ed775403f57d943fb0dad2b",
+      "shape": [
+        512,
+        1536
+      ]
+    },
+    "input": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "input.bin",
+      "role": "input",
+      "sha256": "60a1f1e3b12f5297d95c5475ad4497d39160fddf6880015ed5bf6914c83e4869",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "input_norm": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "input_norm.bin",
+      "role": "intermediate",
+      "sha256": "f95e0d65ab64a53cc69a27e354ca5f13c2f4b6779be41a44f2ed60a32e4afd09",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "key": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "key.bin",
+      "role": "intermediate",
+      "sha256": "626cdda0fb6cf3bece06c7b155b2697cdfc4c1c3b74cee99a10a96cf74c1ec0b",
+      "shape": [
+        1,
+        128,
+        8,
+        64
+      ]
+    },
+    "key_rope": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "key_rope.bin",
+      "role": "intermediate",
+      "sha256": "d327132861f81c1457f1baa14f5227a29395ce2baafeb319ff313abf446fc661",
+      "shape": [
+        1,
+        128,
+        8,
+        64
+      ]
+    },
+    "key_weight": {
+      "byte_count": 1048576,
+      "dtype": "fp32-le",
+      "element_count": 262144,
+      "file": "key_weight.bin",
+      "role": "weight",
+      "sha256": "2b16435a5a3a95acc9b196a45eaedc08917d3b54df1596ece9abe6e6fb97a40f",
+      "shape": [
+        512,
+        512
+      ]
+    },
+    "masked_scores": {
+      "byte_count": 524288,
+      "dtype": "fp32-le",
+      "element_count": 131072,
+      "file": "masked_scores.bin",
+      "role": "intermediate",
+      "sha256": "280b6ad803cbd9f3c34a4d01c4db7f4f34a3c40e6aa71a7a2ccb2c1dd4dedaee",
+      "shape": [
+        1,
+        8,
+        128,
+        128
+      ]
+    },
+    "mlp_gate": {
+      "byte_count": 786432,
+      "dtype": "fp32-le",
+      "element_count": 196608,
+      "file": "mlp_gate.bin",
+      "role": "intermediate",
+      "sha256": "01e0724b9f760297022610431ac8222619868b900e8c28e2a12734c16c6d3076",
+      "shape": [
+        1,
+        128,
+        1536
+      ]
+    },
+    "mlp_output": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "mlp_output.bin",
+      "role": "intermediate",
+      "sha256": "a4cc47a08bfddf54f8532575ed95243e5a43def0edd2aab62ba076354f16b286",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "mlp_swiglu": {
+      "byte_count": 786432,
+      "dtype": "fp32-le",
+      "element_count": 196608,
+      "file": "mlp_swiglu.bin",
+      "role": "intermediate",
+      "sha256": "38ec4c45c24338e26c7e4bc8404bbf94611c89ba63229bc3b493bdd690a428a4",
+      "shape": [
+        1,
+        128,
+        1536
+      ]
+    },
+    "mlp_up": {
+      "byte_count": 786432,
+      "dtype": "fp32-le",
+      "element_count": 196608,
+      "file": "mlp_up.bin",
+      "role": "intermediate",
+      "sha256": "b84492fff8416b4e75a6a3fb2f6f1a122ac04e1cafc6827c2e6bd4c5aeb5b88b",
+      "shape": [
+        1,
+        128,
+        1536
+      ]
+    },
+    "output": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "output.bin",
+      "role": "intermediate",
+      "sha256": "875d40e4cabc8e44bc3d26bd3a7c26e626a4e36c506e40f559e121e9f0ef5240",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "output_weight": {
+      "byte_count": 1048576,
+      "dtype": "fp32-le",
+      "element_count": 262144,
+      "file": "output_weight.bin",
+      "role": "weight",
+      "sha256": "dc8725c9a80dca8ae16ccab8a62b0f00f541672f2afb1cc54d0378f4d13a52ae",
+      "shape": [
+        512,
+        512
+      ]
+    },
+    "post_attention_norm": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "post_attention_norm.bin",
+      "role": "intermediate",
+      "sha256": "446db632681e4f91020d349f5515675afa6b4e9aec9b6364d802020b9f313407",
+      "shape": [
+        1,
+        128,
+        512
+      ]
+    },
+    "query": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "query.bin",
+      "role": "intermediate",
+      "sha256": "7d5b0ae9b53413259a8436ddeba9d409d5f934574e3ec5cfd32f8d70c115a986",
+      "shape": [
+        1,
+        128,
+        8,
+        64
+      ]
+    },
+    "query_rope": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "query_rope.bin",
+      "role": "intermediate",
+      "sha256": "e16a7ad3be470b8d00ea04f585f5f3ccd9a9674d0041ac15cadd0933e4c20030",
+      "shape": [
+        1,
+        128,
+        8,
+        64
+      ]
+    },
+    "query_weight": {
+      "byte_count": 1048576,
+      "dtype": "fp32-le",
+      "element_count": 262144,
+      "file": "query_weight.bin",
+      "role": "weight",
+      "sha256": "27208e139b44fcc727c07709721b3dbe004ad876d5e9a021933cf8712801b42d",
+      "shape": [
+        512,
+        512
+      ]
+    },
+    "up_weight": {
+      "byte_count": 3145728,
+      "dtype": "fp32-le",
+      "element_count": 786432,
+      "file": "up_weight.bin",
+      "role": "weight",
+      "sha256": "75125ee00ae18bff8b21f25a6d805feeb74336686d09962ccaf798dd27c226a4",
+      "shape": [
+        512,
+        1536
+      ]
+    },
+    "value": {
+      "byte_count": 262144,
+      "dtype": "fp32-le",
+      "element_count": 65536,
+      "file": "value.bin",
+      "role": "intermediate",
+      "sha256": "9dbd902c300559cd143fb28cd0b99538baf07415e130613152991579fe1b0748",
+      "shape": [
+        1,
+        128,
+        8,
+        64
+      ]
+    },
+    "value_weight": {
+      "byte_count": 1048576,
+      "dtype": "fp32-le",
+      "element_count": 262144,
+      "file": "value_weight.bin",
+      "role": "weight",
+      "sha256": "cdb2675d0aee7637cf4962085896e0f898a76736be2d71da5cdd5a9038e58d9b",
+      "shape": [
+        512,
+        512
+      ]
+    }
+  }
+}

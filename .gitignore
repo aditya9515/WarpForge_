@@ -1,6 +1,8 @@
 /build/
 /out/
 /.vs/
+/.venv/
+/.uv-cache/
 
 CMakeUserPresets.json
 *.suo
