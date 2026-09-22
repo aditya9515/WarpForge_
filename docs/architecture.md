@@ -43,7 +43,7 @@ The design prioritizes:
               +-----------------------+  +------------------+
 ```
 
-Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder. Stage 5 adds row-major custom FP32/FP16 GEMM, WMMA, and cuBLAS backend dispatch. Stage 6 adds validated FP32 Softmax, RMSNorm, RoPE, elementwise, unfused SwiGLU, and causal-mask primitives. Stage 7 adds measured fused residual + RMSNorm and SwiGLU paths plus an explicit-event pinned pipeline. Runtime ownership and MiniInfer composition remain later-stage work.
+Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder. Stage 5 adds row-major custom FP32/FP16 GEMM, WMMA, and cuBLAS backend dispatch. Stage 6 adds validated FP32 Softmax, RMSNorm, RoPE, elementwise, unfused SwiGLU, and causal-mask primitives. Stage 7 adds measured fused residual + RMSNorm and SwiGLU paths plus an explicit-event pinned pipeline. Stage 8 adds transparent CUDA resource ownership, tensor metadata/views, reusable device workspace, and checked view-based GEMM dispatch. MiniInfer composition remains later-stage work.
 
 ## Component responsibilities
 
@@ -71,7 +71,7 @@ NVIDIA libraries provide optimized baselines and practical backend choices. cuBL
 
 ### Runtime layer
 
-The runtime will eventually provide narrow RAII abstractions such as `DeviceBuffer`, `CudaStream`, `CudaEvent`, tensor shape/type metadata, workspace ownership, and kernel-dispatch helpers. The abstractions must expose costs clearly and support move semantics without unnecessary object-oriented hierarchy.
+The runtime provides narrow move-only `DeviceBuffer<T>`, `CudaStream`, `CudaEvent`, `Tensor`, and `DeviceWorkspace` owners plus `TensorShape`, FP32/FP16 `DType`, and non-owning `TensorView`. Destruction is non-throwing; explicit reset paths report cleanup failures. Native pointers and CUDA handles remain directly available, and no implicit synchronization, allocation, conversion, broadcasting, or layout transformation occurs. The TensorView GEMM bridge validates element counts and dtypes before selecting the existing custom CUDA or cuBLAS path.
 
 ### Validation layer
 
@@ -162,7 +162,7 @@ When implementation begins:
 - no unconditional device-wide synchronization is placed in a performance-sensitive path merely for convenience;
 - matrix multiplication exposes a small backend choice between custom CUDA and cuBLAS without leaking backend-specific state into MiniInfer orchestration.
 
-Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused memory launch APIs. Stage 4 adds selectable multi-pass reduction. Stage 5 adds `GemmProblem`, `GemmVariant`, `GemmBackend`, `GemmDispatch`, sizing/tolerance helpers, CPU reference, and FP32/FP16 launch functions. GEMM calls accept explicit CUDA streams and an externally owned cuBLAS handle so allocation and library state remain visible. Stage 6 adds `SoftmaxVariant`, `RmsNormVariant`, `RopeProblem`, `CausalMaskProblem`, CPU references, elementwise/SwiGLU entry points, and explicit-stream CUDA launch functions. Stage 7 adds fused residual-RMSNorm and SwiGLU entry points; pinned pipeline ownership remains deliberately local to its benchmark/test. Transformer data remains raw contiguous pointers plus dimensions so Stage 8 can introduce views and ownership without hiding the measured costs.
+Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused memory launch APIs. Stage 4 adds selectable multi-pass reduction. Stage 5 adds `GemmProblem`, `GemmVariant`, `GemmBackend`, `GemmDispatch`, sizing/tolerance helpers, CPU reference, and FP32/FP16 launch functions. GEMM calls accept explicit CUDA streams and an externally owned cuBLAS handle so allocation and library state remain visible. Stage 6 adds `SoftmaxVariant`, `RmsNormVariant`, `RopeProblem`, `CausalMaskProblem`, CPU references, elementwise/SwiGLU entry points, and explicit-stream CUDA launch functions. Stage 7 adds fused residual-RMSNorm and SwiGLU entry points. Stage 8 adds `DeviceBuffer<T>`, `CudaStream`, `CudaEvent`, `TensorShape`, `DType`, `Tensor`, `TensorView`, and `DeviceWorkspace`; all benchmark owners use these runtime types, while GEMM adds a checked TensorView overload. Non-GEMM kernels keep their explicit contiguous pointers, dimensions, and streams rather than gaining unused framework-style wrappers.
 
 ## Stage boundaries
 
@@ -190,9 +190,9 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 ## Current limitations
 
 - The foundation has been compiled and run only on the audited Windows configuration.
-- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, VectorAdd, memory kernels, reduction, row-major GEMM with custom/cuBLAS dispatch, and the Stage 6 FP32 Transformer primitives.
+- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, move-only CUDA ownership, contiguous FP32/FP16 tensor views, reusable workspace, VectorAdd, memory kernels, reduction, row-major GEMM with custom/cuBLAS dispatch, and FP32 Transformer primitives/fusions.
 - GEMM currently supports contiguous no-transpose matrices with `alpha=1`, `beta=0`, and FP32 output; it is deliberately not a general BLAS wrapper.
-- Transformer kernels use explicit contiguous pointers/dimensions and do not yet provide tensor ownership, attention orchestration, or FP16 variants.
+- Tensor ownership is available, but non-GEMM Transformer kernels still use explicit contiguous pointers/dimensions; attention orchestration and FP16 Transformer variants do not yet exist.
 - Fusion is limited to residual + RMSNorm and SiLU + multiply; attention/GEMM/mask fusion is not implemented.
 - Linux, WSL2, PyTorch, and TensorRT paths remain planned but unvalidated; cuBLAS is validated only for the Stage 5 Windows GEMM path.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.

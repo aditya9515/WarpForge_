@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 7 — Fusion and Asynchronous Execution: complete.**
+**Stage 8 — WarpForge GPU Runtime: complete.**
 
-The repository now has retained, measured fused residual + RMSNorm and fused SwiGLU paths plus a correctness-tested pinned two-stream event pipeline. Fusion improves median latency by `1.477×` and `1.631×`, respectively. The two-stream pipeline produces no observed GPU overlap and is `4.28%` slower than one stream, so the simpler path remains preferred. Stage 8 will begin only when explicitly requested.
+The repository now has move-only, cost-transparent ownership for device allocations, streams, events, tensors, tensor views, and aligned reusable workspace. Existing benchmark allocations/streams use the shared runtime, and GEMM dispatch accepts checked FP32/FP16 `TensorView` inputs while keeping the custom/cuBLAS choice and native handles explicit. All 26 tests pass and Compute Sanitizer reports zero errors and zero leaked bytes for the focused runtime path. Stage 9 will begin only when explicitly requested.
 
 ## Goals
 
@@ -107,6 +107,7 @@ build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmu
 build\warpforge-benchmark-gemm.exe --sizes 256,512,1024,2048 --warmups 10 --iterations 100 --output-dir benchmarks\results\gemm
 build\warpforge-benchmark-transformer.exe --rows 4096 --columns 1024 --elements 16777216 --sequence 2048 --heads 8 --head-dim 64 --mask-length 512 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage6
 build\warpforge-benchmark-fusion.exe --rows 4096 --columns 1024 --elements 16777216 --pipeline-elements 16777216 --chunks 8 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage7
+compute-sanitizer --tool memcheck --leak-check full --error-exitcode 99 build\warpforge_runtime_test.exe --skip-allocation-failure
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -124,6 +125,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | `warpforge_benchmark_transformer` | Validates and measures Stage 6 Transformer-oriented FP32 kernels |
 | `warpforge_benchmark_fusion` | Compares separate/fused Transformer paths and single/two-stream pinned pipelines |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
+| `warpforge_runtime_test` | Validates move-only ownership, async copies, workspace reuse, tensor views, and GEMM backend dispatch |
 
 `CUDA_CHECK(...)` evaluates a CUDA runtime call once and throws an exception containing the expression, source location, error name, numeric code, and description. A successful kernel launch will only show that work was accepted for execution; later stages must check launch errors immediately and use synchronization at validation boundaries to surface asynchronous execution failures. The helper deliberately does not synchronize every call because unconditional device-wide synchronization would distort performance-sensitive paths.
 
@@ -162,6 +164,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [GEMM optimization ladder](docs/performance/gemm.md)
 - [Transformer-oriented CUDA kernels](docs/performance/transformer_kernels.md)
 - [Fusion and asynchronous execution](docs/performance/fusion.md)
+- [WarpForge GPU runtime](docs/performance/runtime.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -678,3 +681,67 @@ Nsight Systems observes streams 15 and 16 but zero overlapping intervals across 
 ### Next stage
 
 Stage 8 will add transparent move-only `DeviceBuffer`, `CudaStream`, `CudaEvent`, tensor shape/type/view ownership, reusable workspace, and custom/cuBLAS dispatch integration. Existing kernels and benchmarks will migrate to explicit views and streams while preserving measured behavior. It will not begin until explicitly requested.
+
+## Stage 8 completion report
+
+### Implemented
+
+- Move-only `DeviceBuffer<T>`, `CudaStream`, and `CudaEvent` resource owners with `noexcept` destruction, explicit checked reset, release, and native-handle access
+- Checked `TensorShape`, FP32/FP16-only `DType`, owning `Tensor`, and non-owning `TensorView`
+- Capacity-bounded `DeviceWorkspace` with power-of-two aligned slices, resettable allocation cursor, and storage reuse
+- Checked TensorView GEMM dispatch across custom CUDA and cuBLAS backends
+- Shared runtime ownership in every existing benchmark without changing kernel timing boundaries
+
+### Files
+
+- Runtime public interface in `include/warpforge/runtime.cuh`
+- Runtime implementation in `src/runtime/runtime.cu`
+- TensorView GEMM bridge in `include/warpforge/gemm.cuh` and `src/kernels/gemm/gemm.cu`
+- Focused runtime coverage in `tests/cuda/runtime_test.cu`
+- Migrated benchmark ownership in all six benchmark applications
+- Fourteen Stage 8 report JSON records, two summary CSV files, and `docs/performance/runtime.md`
+
+### Tests
+
+All 26 Release CTests pass. Runtime coverage includes move-only type contracts and moved-from state, zero-size resources, checked shape and allocation overflow, a real CUDA allocation failure, async H2D/D2H copies, stream/event operation, typed-view validation, aligned workspace reuse/growth/exhaustion, and custom/cuBLAS GEMM dispatch. Compute Sanitizer 2024.3.0 reports `0 errors` and `0 bytes leaked in 0 allocations` for the focused test with only its intentional out-of-memory case disabled.
+
+### Benchmarks and measured results
+
+Compatibility runs were generated from clean code commit `e8803f2` with seed `2027`, 50 warmups, and 500 samples per case on the RTX 3050 Laptop GPU.
+
+- 1,024-square FP32 GEMM kept the expected ordering: naive `4.822992 ms`, tiled `3.600896 ms`, coalesced `3.185536 ms`, register-blocked `1.188864 ms`, and cuBLAS `0.578560 ms`.
+- Register-blocked FP32 reached `48.66%` of cuBLAS, close to the Stage 5 report's `48.17%` ratio despite run-to-run absolute latency variation.
+- TensorView-dispatched FP16 GEMM measured tiled `3.821568 ms`, WMMA `0.744448 ms`, and cuBLAS `0.224256 ms`; all paths passed validation.
+- Migrated residual + RMSNorm fusion retained a `1.488×` speedup and migrated SwiGLU fusion retained a `1.631×` speedup.
+- The two-stream pinned pipeline remained neutral/slower at `0.998×` the single-stream baseline and is still not preferred on this machine.
+
+The runtime creates no hidden work inside measured launch lambdas: TensorViews are constructed before timing, and allocation, copies, validation, and serialization remain outside kernel-only intervals.
+
+### Concepts learned
+
+- RAII can improve failure safety without hiding CUDA handles or synchronization boundaries.
+- Move semantics must transfer shape/cursor metadata as well as the device pointer; moved-from objects need coherent observable state.
+- An expected `cudaMalloc` failure is a valid normal test but must be omitted from a zero-error sanitizer run because memcheck correctly records the failed CUDA API call.
+- Backend dispatch can validate type/shape contracts once and still remain a thin call into the same measured custom or cuBLAS implementation.
+
+### Known limitations
+
+- `Tensor` is contiguous-only and supports FP32/FP16; there are no strides, broadcasting, layouts, autograd, or implicit conversions.
+- `DeviceWorkspace` is a single-threaded bump allocator; callers explicitly clear it between reuse epochs.
+- Destructors cannot report cleanup failures, so callers that need cleanup diagnostics must use `reset()` before scope exit.
+- The public TensorView dispatcher currently covers GEMM. Other kernels retain their already-explicit pointer, dimension, and stream APIs.
+- Benchmarks retain local pinned-host ownership because a general pinned-memory abstraction was not part of Stage 8.
+- Results cover one Windows laptop GPU with unlocked clocks; the compatibility reruns are not new optimization claims.
+
+### Commits
+
+- `e8803f2 runtime: add transparent CUDA ownership layer`
+- `docs(runtime): record Stage 8 validation` (this evidence and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Runtime ownership is move-only, leak-free under Compute Sanitizer, tested across failure and reuse paths, native handles remain visible, both GEMM backends work through checked views, and all existing benchmark workloads pass after migration.
+
+### Next stage
+
+Stage 9 will compose the validated kernels into one deterministic pre-norm LLaMA-style MiniInfer block, add approved PyTorch fixtures, validate named intermediates, reuse runtime allocations/workspace, and support custom/cuBLAS GEMM backends. It will not begin until explicitly requested.
