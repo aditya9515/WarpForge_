@@ -1,6 +1,7 @@
 #include <warpforge/benchmark.hpp>
 #include <warpforge/cuda_check.cuh>
 #include <warpforge/gemm.cuh>
+#include <warpforge/runtime.cuh>
 #include <warpforge/validation.hpp>
 
 #include <cublas_v2.h>
@@ -85,53 +86,8 @@ struct RecordedResult final {
 };
 
 template <typename T>
-class LocalDeviceBuffer final {
-public:
-    explicit LocalDeviceBuffer(const std::size_t count) {
-        if (count > 0U) {
-            CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
-        }
-    }
-
-    ~LocalDeviceBuffer() noexcept {
-        if (pointer_ != nullptr) {
-            cudaFree(pointer_);
-        }
-    }
-
-    LocalDeviceBuffer(const LocalDeviceBuffer&) = delete;
-    LocalDeviceBuffer& operator=(const LocalDeviceBuffer&) = delete;
-
-    [[nodiscard]] T* get() const noexcept {
-        return pointer_;
-    }
-
-private:
-    T* pointer_{};
-};
-
-class LocalStream final {
-public:
-    LocalStream() {
-        CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
-    }
-
-    ~LocalStream() noexcept {
-        if (stream_ != nullptr) {
-            cudaStreamDestroy(stream_);
-        }
-    }
-
-    LocalStream(const LocalStream&) = delete;
-    LocalStream& operator=(const LocalStream&) = delete;
-
-    [[nodiscard]] cudaStream_t get() const noexcept {
-        return stream_;
-    }
-
-private:
-    cudaStream_t stream_{};
-};
+using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
+using LocalStream = warpforge::CudaStream;
 
 class LocalCublasHandle final {
 public:
@@ -360,30 +316,40 @@ RecordedResult benchmark_case(
     const CaseDefinition& definition,
     const warpforge::GemmProblem& problem,
     const Options& options,
-    const LocalDeviceBuffer<float>& device_a_fp32,
-    const LocalDeviceBuffer<float>& device_b_fp32,
-    const LocalDeviceBuffer<__half>& device_a_fp16,
-    const LocalDeviceBuffer<__half>& device_b_fp16,
+    LocalDeviceBuffer<float>& device_a_fp32,
+    LocalDeviceBuffer<float>& device_b_fp32,
+    LocalDeviceBuffer<__half>& device_a_fp16,
+    LocalDeviceBuffer<__half>& device_b_fp16,
     LocalDeviceBuffer<float>& device_c,
     const std::vector<float>& reference,
     const std::vector<float>* cpu_reference,
     const cublasHandle_t handle,
     const cudaStream_t stream) {
+    const warpforge::TensorView a_fp32{
+        device_a_fp32.get(), {problem.m, problem.k}, warpforge::DType::fp32};
+    const warpforge::TensorView b_fp32{
+        device_b_fp32.get(), {problem.k, problem.n}, warpforge::DType::fp32};
+    const warpforge::TensorView a_fp16{
+        device_a_fp16.get(), {problem.m, problem.k}, warpforge::DType::fp16};
+    const warpforge::TensorView b_fp16{
+        device_b_fp16.get(), {problem.k, problem.n}, warpforge::DType::fp16};
+    const warpforge::TensorView output{
+        device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
     auto launch = [&](const cudaStream_t launch_stream) {
         if (definition.fp16_input) {
-            warpforge::gemm_fp16_cuda(
-                device_a_fp16.get(),
-                device_b_fp16.get(),
-                device_c.get(),
+            warpforge::gemm_cuda(
+                a_fp16,
+                b_fp16,
+                output,
                 problem,
                 definition.dispatch,
                 handle,
                 launch_stream);
         } else {
-            warpforge::gemm_fp32_cuda(
-                device_a_fp32.get(),
-                device_b_fp32.get(),
-                device_c.get(),
+            warpforge::gemm_cuda(
+                a_fp32,
+                b_fp32,
+                output,
                 problem,
                 definition.dispatch,
                 handle,
@@ -594,10 +560,20 @@ int main(int argument_count, char** arguments) {
 
             std::vector<float> fp32_reference(matrix_elements);
             std::vector<float> fp16_reference(matrix_elements);
-            warpforge::gemm_fp32_cuda(
-                device_a_fp32.get(),
-                device_b_fp32.get(),
-                device_c.get(),
+            const warpforge::TensorView a_fp32{
+                device_a_fp32.get(), {problem.m, problem.k}, warpforge::DType::fp32};
+            const warpforge::TensorView b_fp32{
+                device_b_fp32.get(), {problem.k, problem.n}, warpforge::DType::fp32};
+            const warpforge::TensorView a_fp16{
+                device_a_fp16.get(), {problem.m, problem.k}, warpforge::DType::fp16};
+            const warpforge::TensorView b_fp16{
+                device_b_fp16.get(), {problem.k, problem.n}, warpforge::DType::fp16};
+            const warpforge::TensorView output{
+                device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
+            warpforge::gemm_cuda(
+                a_fp32,
+                b_fp32,
+                output,
                 problem,
                 {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32},
                 handle.get(),
@@ -608,10 +584,10 @@ int main(int argument_count, char** arguments) {
                 device_c.get(),
                 matrix_elements * sizeof(float),
                 cudaMemcpyDeviceToHost));
-            warpforge::gemm_fp16_cuda(
-                device_a_fp16.get(),
-                device_b_fp16.get(),
-                device_c.get(),
+            warpforge::gemm_cuda(
+                a_fp16,
+                b_fp16,
+                output,
                 problem,
                 {warpforge::GemmBackend::cublas, warpforge::GemmVariant::tiled_fp16_fp32},
                 handle.get(),

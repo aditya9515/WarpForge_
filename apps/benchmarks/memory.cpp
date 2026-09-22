@@ -1,6 +1,7 @@
 #include <warpforge/benchmark.hpp>
 #include <warpforge/cuda_check.cuh>
 #include <warpforge/memory.cuh>
+#include <warpforge/runtime.cuh>
 #include <warpforge/validation.hpp>
 
 #include <cuda_runtime_api.h>
@@ -49,30 +50,7 @@ struct RecordedResult final {
 };
 
 template <typename T>
-class LocalDeviceBuffer final {
-public:
-    explicit LocalDeviceBuffer(const std::size_t count) {
-        if (count > 0) {
-            CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
-        }
-    }
-
-    ~LocalDeviceBuffer() noexcept {
-        if (pointer_ != nullptr) {
-            cudaFree(pointer_);
-        }
-    }
-
-    LocalDeviceBuffer(const LocalDeviceBuffer&) = delete;
-    LocalDeviceBuffer& operator=(const LocalDeviceBuffer&) = delete;
-
-    [[nodiscard]] T* get() const noexcept {
-        return pointer_;
-    }
-
-private:
-    T* pointer_{};
-};
+using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
 
 template <typename T>
 class LocalPinnedBuffer final {
@@ -109,28 +87,7 @@ private:
     std::size_t count_{};
 };
 
-class LocalStream final {
-public:
-    LocalStream() {
-        CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
-    }
-
-    ~LocalStream() noexcept {
-        if (stream_ != nullptr) {
-            cudaStreamDestroy(stream_);
-        }
-    }
-
-    LocalStream(const LocalStream&) = delete;
-    LocalStream& operator=(const LocalStream&) = delete;
-
-    [[nodiscard]] cudaStream_t get() const noexcept {
-        return stream_;
-    }
-
-private:
-    cudaStream_t stream_{};
-};
+using LocalStream = warpforge::CudaStream;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
     if (text.empty() || text.front() == '-') {

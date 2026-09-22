@@ -3,6 +3,7 @@
 #include <warpforge/elementwise.cuh>
 #include <warpforge/fusion.cuh>
 #include <warpforge/rmsnorm.cuh>
+#include <warpforge/runtime.cuh>
 #include <warpforge/validation.hpp>
 
 #include <cuda_runtime_api.h>
@@ -49,25 +50,7 @@ struct RecordedResult final {
 };
 
 template <typename T>
-class LocalDeviceBuffer final {
-public:
-    explicit LocalDeviceBuffer(const std::size_t count) {
-        if (count > 0U) {
-            CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
-        }
-    }
-    ~LocalDeviceBuffer() noexcept {
-        if (pointer_ != nullptr) {
-            cudaFree(pointer_);
-        }
-    }
-    LocalDeviceBuffer(const LocalDeviceBuffer&) = delete;
-    LocalDeviceBuffer& operator=(const LocalDeviceBuffer&) = delete;
-    [[nodiscard]] T* get() const noexcept { return pointer_; }
-
-private:
-    T* pointer_{};
-};
+using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
 
 template <typename T>
 class LocalPinnedBuffer final {
@@ -96,37 +79,7 @@ private:
     std::size_t count_{};
 };
 
-class LocalStream final {
-public:
-    LocalStream() { CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking)); }
-    ~LocalStream() noexcept {
-        if (stream_ != nullptr) {
-            cudaStreamDestroy(stream_);
-        }
-    }
-    LocalStream(const LocalStream&) = delete;
-    LocalStream& operator=(const LocalStream&) = delete;
-    [[nodiscard]] cudaStream_t get() const noexcept { return stream_; }
-
-private:
-    cudaStream_t stream_{};
-};
-
-class LocalEvent final {
-public:
-    LocalEvent() { CUDA_CHECK(cudaEventCreateWithFlags(&event_, cudaEventDisableTiming)); }
-    ~LocalEvent() noexcept {
-        if (event_ != nullptr) {
-            cudaEventDestroy(event_);
-        }
-    }
-    LocalEvent(const LocalEvent&) = delete;
-    LocalEvent& operator=(const LocalEvent&) = delete;
-    [[nodiscard]] cudaEvent_t get() const noexcept { return event_; }
-
-private:
-    cudaEvent_t event_{};
-};
+using LocalStream = warpforge::CudaStream;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
     if (text.empty() || text.front() == '-') {
@@ -523,7 +476,9 @@ void benchmark_pipeline_variant(
     warpforge::silu_cpu(input.get(), expected.data(), count);
 
     std::array<LocalStream, 2> streams{};
-    std::array<LocalEvent, 2> completion_events{};
+    std::array<warpforge::CudaEvent, 2> completion_events{
+        warpforge::CudaEvent{cudaEventDisableTiming},
+        warpforge::CudaEvent{cudaEventDisableTiming}};
     std::array<LocalDeviceBuffer<float>, 2> buffers{
         LocalDeviceBuffer<float>{chunk_capacity}, LocalDeviceBuffer<float>{chunk_capacity}};
     const std::size_t active_streams = two_streams ? std::min<std::size_t>(2U, chunks) : 1U;

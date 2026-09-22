@@ -1,6 +1,7 @@
 #include <warpforge/benchmark.hpp>
 #include <warpforge/cuda_check.cuh>
 #include <warpforge/reduction.cuh>
+#include <warpforge/runtime.cuh>
 #include <warpforge/validation.hpp>
 
 #include <cuda_runtime_api.h>
@@ -55,30 +56,7 @@ struct RecordedResult final {
 };
 
 template <typename T>
-class LocalDeviceBuffer final {
-public:
-    explicit LocalDeviceBuffer(const std::size_t count) {
-        if (count > 0) {
-            CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
-        }
-    }
-
-    ~LocalDeviceBuffer() noexcept {
-        if (pointer_ != nullptr) {
-            cudaFree(pointer_);
-        }
-    }
-
-    LocalDeviceBuffer(const LocalDeviceBuffer&) = delete;
-    LocalDeviceBuffer& operator=(const LocalDeviceBuffer&) = delete;
-
-    [[nodiscard]] T* get() const noexcept {
-        return pointer_;
-    }
-
-private:
-    T* pointer_{};
-};
+using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
     if (text.empty() || text.front() == '-') {

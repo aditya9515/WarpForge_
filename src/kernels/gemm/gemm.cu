@@ -556,4 +556,51 @@ void gemm_fp16_cuda(
     throw std::invalid_argument("selected GEMM variant does not accept FP16 input");
 }
 
+void gemm_cuda(
+    const TensorView& a,
+    const TensorView& b,
+    TensorView c,
+    const GemmProblem& problem,
+    const GemmDispatch dispatch,
+    const cublasHandle_t cublas_handle,
+    const cudaStream_t stream) {
+    const std::size_t expected_a = gemm_a_elements(problem);
+    const std::size_t expected_b = gemm_b_elements(problem);
+    const std::size_t expected_c = gemm_c_elements(problem);
+    if (a.element_count() != expected_a || b.element_count() != expected_b ||
+        c.element_count() != expected_c) {
+        throw std::invalid_argument("GEMM TensorView element counts do not match the problem");
+    }
+    if (a.dtype() != b.dtype()) {
+        throw std::invalid_argument("GEMM input TensorView dtypes must match");
+    }
+    if (c.dtype() != DType::fp32) {
+        throw std::invalid_argument("GEMM output TensorView must be fp32");
+    }
+
+    if (a.dtype() == DType::fp32) {
+        gemm_fp32_cuda(
+            a.data_as<float>(),
+            b.data_as<float>(),
+            c.data_as<float>(),
+            problem,
+            dispatch,
+            cublas_handle,
+            stream);
+        return;
+    }
+    if (a.dtype() == DType::fp16) {
+        gemm_fp16_cuda(
+            a.data_as<__half>(),
+            b.data_as<__half>(),
+            c.data_as<float>(),
+            problem,
+            dispatch,
+            cublas_handle,
+            stream);
+        return;
+    }
+    throw std::invalid_argument("unsupported GEMM TensorView dtype");
+}
+
 }  // namespace warpforge

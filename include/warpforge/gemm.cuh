@@ -1,5 +1,6 @@
 #pragma once
 
+#include <warpforge/runtime.cuh>
 #include <warpforge/validation.hpp>
 
 #include <cublas_v2.h>
@@ -67,6 +68,17 @@ void gemm_fp16_cuda(
     const __half* a,
     const __half* b,
     float* c,
+    const GemmProblem& problem,
+    GemmDispatch dispatch,
+    cublasHandle_t cublas_handle = nullptr,
+    cudaStream_t stream = nullptr);
+
+// Cost-transparent tensor-view dispatch. Inputs may be FP32 or FP16; output is
+// always FP32. The selected backend and native handles remain caller-visible.
+void gemm_cuda(
+    const TensorView& a,
+    const TensorView& b,
+    TensorView c,
     const GemmProblem& problem,
     GemmDispatch dispatch,
     cublasHandle_t cublas_handle = nullptr,

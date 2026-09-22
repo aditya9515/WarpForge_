@@ -1,5 +1,6 @@
 #include <warpforge/benchmark.hpp>
 #include <warpforge/cuda_check.cuh>
+#include <warpforge/runtime.cuh>
 #include <warpforge/validation.hpp>
 #include <warpforge/vector_add.cuh>
 
@@ -29,31 +30,7 @@ struct Options final {
 };
 
 template <typename T>
-class LocalDeviceAllocation final {
-public:
-    explicit LocalDeviceAllocation(const std::size_t element_count) {
-        if (element_count == 0) {
-            return;
-        }
-        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), element_count * sizeof(T)));
-    }
-
-    ~LocalDeviceAllocation() noexcept {
-        if (pointer_ != nullptr) {
-            cudaFree(pointer_);
-        }
-    }
-
-    LocalDeviceAllocation(const LocalDeviceAllocation&) = delete;
-    LocalDeviceAllocation& operator=(const LocalDeviceAllocation&) = delete;
-
-    [[nodiscard]] T* get() const noexcept {
-        return pointer_;
-    }
-
-private:
-    T* pointer_{};
-};
+using LocalDeviceAllocation = warpforge::DeviceBuffer<T>;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
     if (text.empty() || text.front() == '-') {

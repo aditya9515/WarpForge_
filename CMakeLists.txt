@@ -61,6 +61,7 @@ add_library(
         src/kernels/transformer/softmax.cu
         src/kernels/vector/vector_add.cu
         src/runtime/device.cu
+        src/runtime/runtime.cu
         src/validation.cpp
 )
 add_library(WarpForge::warpforge ALIAS warpforge)
@@ -150,6 +151,10 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_cuda_smoke PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_cuda_smoke)
 
+    add_executable(warpforge_runtime_test tests/cuda/runtime_test.cu)
+    target_link_libraries(warpforge_runtime_test PRIVATE WarpForge::warpforge)
+    warpforge_enable_warnings(warpforge_runtime_test)
+
     add_executable(warpforge_vector_add_test tests/cuda/vector_add_test.cpp)
     target_link_libraries(warpforge_vector_add_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_vector_add_test)
@@ -193,6 +198,7 @@ if(BUILD_TESTING)
     add_test(NAME cpu.validation COMMAND warpforge_validation_test)
     add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
+    add_test(NAME cuda.runtime COMMAND warpforge_runtime_test)
     add_test(NAME cuda.vector_add COMMAND warpforge_vector_add_test)
     add_test(NAME cuda.memory COMMAND warpforge_memory_test)
     add_test(NAME cuda.reduction COMMAND warpforge_reduction_test)
@@ -315,6 +321,7 @@ if(BUILD_TESTING)
 
     set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
+    set_tests_properties(cuda.runtime PROPERTIES LABELS "cuda;runtime;correctness")
     set_tests_properties(
         cuda.vector_add cuda.memory cuda.reduction cuda.gemm cuda.softmax cuda.rmsnorm
         cuda.rope
