@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 8 — WarpForge GPU Runtime: complete.**
+**Stage 9 — MiniInfer single Transformer block: complete.**
 
-The repository now has move-only, cost-transparent ownership for device allocations, streams, events, tensors, tensor views, and aligned reusable workspace. Existing benchmark allocations/streams use the shared runtime, and GEMM dispatch accepts checked FP32/FP16 `TensorView` inputs while keeping the custom/cuBLAS choice and native handles explicit. All 26 tests pass and Compute Sanitizer reports zero errors and zero leaked bytes for the focused runtime path. Stage 9 will begin only when explicitly requested.
+The repository now runs one deterministic FP32 pre-norm LLaMA-style block with reusable weights/workspace and selectable custom or cuBLAS projection GEMMs. A pinned CPU-PyTorch reference fixture validates all 18 named intermediates for both backends. All 31 tests pass, the full 128-token report has 500 measured samples per backend/scope, and Compute Sanitizer reports zero errors and zero leaked bytes for the focused MiniInfer path. Stage 10 will begin only when explicitly requested.
 
 ## Goals
 
@@ -107,7 +107,9 @@ build\warpforge-benchmark-reduction.exe --size 16777216 --block-size 256 --warmu
 build\warpforge-benchmark-gemm.exe --sizes 256,512,1024,2048 --warmups 10 --iterations 100 --output-dir benchmarks\results\gemm
 build\warpforge-benchmark-transformer.exe --rows 4096 --columns 1024 --elements 16777216 --sequence 2048 --heads 8 --head-dim 64 --mask-length 512 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage6
 build\warpforge-benchmark-fusion.exe --rows 4096 --columns 1024 --elements 16777216 --pipeline-elements 16777216 --chunks 8 --warmups 10 --iterations 100 --output-dir benchmarks\results\stage7
+build\warpforge-miniinfer.exe --fixture-dir benchmarks\fixtures\miniinfer_full --backend all --warmups 50 --iterations 500 --output-dir benchmarks\results\stage9
 compute-sanitizer --tool memcheck --leak-check full --error-exitcode 99 build\warpforge_runtime_test.exe --skip-allocation-failure
+compute-sanitizer --tool memcheck --leak-check full build\warpforge_miniinfer_test.exe tests\fixtures\miniinfer_small
 ```
 
 The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so it reuses the deliberately selected MSVC environment. Other NVIDIA architectures remain configurable with `-DCMAKE_CUDA_ARCHITECTURES=<architectures>`.
@@ -124,6 +126,7 @@ The preset targets `sm_86` by default and passes `--use-local-env` to `nvcc` so 
 | `warpforge_benchmark_gemm` | Validates and measures custom FP32/FP16 GEMM and matched cuBLAS baselines |
 | `warpforge_benchmark_transformer` | Validates and measures Stage 6 Transformer-oriented FP32 kernels |
 | `warpforge_benchmark_fusion` | Compares separate/fused Transformer paths and single/two-stream pinned pipelines |
+| `warpforge_miniinfer` | Validates every named block intermediate and measures custom/cuBLAS MiniInfer paths |
 | `warpforge_cuda_smoke` | Validates runtime initialization and basic device discovery through CTest |
 | `warpforge_runtime_test` | Validates move-only ownership, async copies, workspace reuse, tensor views, and GEMM backend dispatch |
 
@@ -165,6 +168,7 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [Transformer-oriented CUDA kernels](docs/performance/transformer_kernels.md)
 - [Fusion and asynchronous execution](docs/performance/fusion.md)
 - [WarpForge GPU runtime](docs/performance/runtime.md)
+- [MiniInfer single Transformer block](docs/performance/miniinfer.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report
@@ -745,3 +749,74 @@ The runtime creates no hidden work inside measured launch lambdas: TensorViews a
 ### Next stage
 
 Stage 9 will compose the validated kernels into one deterministic pre-norm LLaMA-style MiniInfer block, add approved PyTorch fixtures, validate named intermediates, reuse runtime allocations/workspace, and support custom/cuBLAS GEMM backends. It will not begin until explicitly requested.
+
+## Stage 9 completion report
+
+### Implemented
+
+- Deterministic FP32 pre-norm LLaMA-style block with the required 1 × 128 × 512 report configuration, 8 heads, head dimension 64, intermediate size 1536, and RMSNorm epsilon `1e-5`
+- RMSNorm → Q/K/V → RoPE → scaled causal attention → output/residual → RMSNorm → SwiGLU MLP → output/residual execution
+- Selectable custom register-blocked FP32 or cuBLAS projection-GEMM backends
+- Dedicated attention score/value CPU references and CUDA kernels with explicit layouts and streams
+- Reused device-resident weights, caller input/output tensors, and one aligned activation workspace
+- Deterministic PyTorch fixture generation plus manifest/hash validation and all-intermediate observation
+- Separate device-resident kernel-sequence and H2D/forward/D2H benchmark scopes
+
+### Files
+
+- MiniInfer and attention public APIs under `include/warpforge/`
+- Attention kernels under `src/kernels/transformer/` and block/fixture implementation under `src/miniinfer/`
+- `warpforge-miniinfer` application under `apps/miniinfer/`
+- Approved environment lock and fixture generator under `python/`
+- Small CTest and full report fixtures under `tests/fixtures/` and `benchmarks/fixtures/`
+- Attention/MiniInfer CUDA tests and Python fixture/result validators under `tests/`
+- Four report JSON records, summary/validation CSV files, and `docs/performance/miniinfer.md`
+
+### Tests
+
+All 31 Release CTests pass. Attention coverage includes irregular shapes, tail launches, invalid dimensions, overflow, null pointers, block limits, and forbidden aliasing. The small MiniInfer fixture validates all 18 named intermediates through both GEMM backends and confirms workspace reuse. Both fixture manifests pass exact shape, byte-count, SHA-256, finite-value, and Softmax row-sum checks.
+
+Compute Sanitizer 2024.3.0 reports `0 errors` and `0 bytes leaked in 0 allocations` for the focused MiniInfer test across custom and cuBLAS backends.
+
+### Benchmarks and measured results
+
+The report run used clean implementation commit `4c4225a`, seed `2027`, 50 warmups, and 500 samples per backend/scope on the RTX 3050 Laptop GPU.
+
+- custom device-resident sequence: median `1.321984 ms`, p95 `1.664000 ms`, `96,824` tokens/s
+- cuBLAS device-resident sequence: median `0.737280 ms`, p95 `0.764642 ms`, `173,611` tokens/s
+- custom H2D + forward + D2H: median `1.467500 ms`, p95 `1.529260 ms`, `87,223` tokens/s
+- cuBLAS H2D + forward + D2H: median `0.871500 ms`, p95 `0.927205 ms`, `146,873` tokens/s
+- custom maximum absolute error across all intermediates: `3.099442e-6`
+- cuBLAS maximum absolute error across all intermediates: `2.145767e-6`
+
+cuBLAS is `1.793×` faster than the custom backend by device-resident median at this shape. Both backends pass all 18 intermediate comparisons with zero failing elements. Allocation, fixture loading, validation, serialization, and weight upload are outside both timing scopes; the end-to-end scope intentionally includes one pageable input H2D copy, forward execution, one pageable output D2H copy, and completion.
+
+### Concepts learned
+
+- Whole-block correctness is much easier to diagnose when every semantic boundary has a named reference tensor.
+- A small checked runtime can reuse all inference allocations without hiding streams, cuBLAS handles, or synchronization.
+- “Custom backend” must identify exactly which operation changes; here it selects projection GEMMs while the other WarpForge kernels are shared.
+- Kernel-sequence and transfer-inclusive latency answer different questions and should remain separate records.
+- A practical library backend can be substantially faster while the custom path remains valuable for inspecting the execution stack.
+
+### Known limitations
+
+- The block is FP32, batch 1, one layer, and one report shape on one Windows laptop GPU with unlocked clocks.
+- Attention score/value products are simple FP32 CUDA kernels and have not yet received dedicated profiler-guided optimization.
+- The PyTorch environment is CPU-only and generates correctness fixtures; PyTorch CUDA timing belongs to Stage 10.
+- There is no FP16 block, tokenizer, KV cache, text generation, multi-block model, model loader, or model download.
+- End-to-end timing excludes fixture loading, weight upload, and allocation, and uses pageable host input/output buffers.
+- TensorRT was not installed or attempted in this stage.
+
+### Commits
+
+- `4c4225a feat(miniinfer): add validated transformer block`
+- `docs(miniinfer): record Stage 9 validation` (this measured-result and completion-report commit)
+
+### Definition of Done
+
+**PASS.** Every named intermediate and the final output match the deterministic PyTorch fixture through both GEMM backends, weights and workspace are reused, timing boundaries are explicit, all report records contain measured samples from the clean implementation commit, and the focused path is leak/error-free under Compute Sanitizer.
+
+### Next stage
+
+Stage 10 will compare the identical block against PyTorch CUDA and preserve the custom/cuBLAS block-level baseline. A compatible TensorRT/ONNX path will be attempted only after a separate installation approval; otherwise any exact compatibility blocker will be documented as partial. Stage 10 will not begin until explicitly requested.

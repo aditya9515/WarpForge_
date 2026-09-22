@@ -43,7 +43,7 @@ The design prioritizes:
               +-----------------------+  +------------------+
 ```
 
-Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder. Stage 5 adds row-major custom FP32/FP16 GEMM, WMMA, and cuBLAS backend dispatch. Stage 6 adds validated FP32 Softmax, RMSNorm, RoPE, elementwise, unfused SwiGLU, and causal-mask primitives. Stage 7 adds measured fused residual + RMSNorm and SwiGLU paths plus an explicit-event pinned pipeline. Stage 8 adds transparent CUDA resource ownership, tensor metadata/views, reusable device workspace, and checked view-based GEMM dispatch. MiniInfer composition remains later-stage work.
+Stages 1 and 2 implement the foundation slice: CUDA error checking, device discovery, tolerance-based FP32 validation, CUDA-event benchmark timing, JSON result export, a diagnostic application, and the VectorAdd validation workload. Stage 3 adds explicit memory/execution experiments. Stage 4 adds a selectable, arbitrary-length sum/maximum reduction ladder. Stage 5 adds row-major custom FP32/FP16 GEMM, WMMA, and cuBLAS backend dispatch. Stage 6 adds validated FP32 Softmax, RMSNorm, RoPE, elementwise, unfused SwiGLU, and causal-mask primitives. Stage 7 adds measured fused residual + RMSNorm and SwiGLU paths plus an explicit-event pinned pipeline. Stage 8 adds transparent CUDA resource ownership, tensor metadata/views, reusable device workspace, and checked view-based GEMM dispatch. Stage 9 composes those layers into one fixture-validated FP32 MiniInfer block with custom/cuBLAS projection dispatch.
 
 ## Component responsibilities
 
@@ -83,7 +83,9 @@ The benchmark layer owns warmup, repetition, synchronization boundaries, sample 
 
 ### MiniInfer
 
-MiniInfer will compose validated primitives into one small LLaMA-style Transformer block before expanding further. It will use deterministic synthetic inputs or a deliberately small configuration, selectable custom/cuBLAS GEMM backends, reusable memory, and a PyTorch reference path. Tokenization and text generation are out of scope until the numerical forward path is correct.
+MiniInfer composes the validated primitives into one pre-norm LLaMA-style Transformer block. `MiniInferWeights` owns and caches views for nine parameter tensors; `MiniInferWorkspace` allocates all 17 internal activations from one aligned reusable device allocation; and `MiniInferBlock` orchestrates the explicit-stream forward path into a caller-owned output view. Custom and cuBLAS projection GEMMs are selectable without changing the remaining kernel sequence.
+
+The CPU-PyTorch reference generator emits deterministic little-endian FP32 fixtures with a versioned manifest, shapes, byte counts, and SHA-256 hashes. An optional intermediate observer validates 18 named semantic boundaries without adding copies or synchronization to normal inference calls. Tokenization, KV cache, text generation, multiple layers, and model downloads remain outside this bounded runtime.
 
 ## Primary data flows
 
@@ -162,7 +164,7 @@ When implementation begins:
 - no unconditional device-wide synchronization is placed in a performance-sensitive path merely for convenience;
 - matrix multiplication exposes a small backend choice between custom CUDA and cuBLAS without leaking backend-specific state into MiniInfer orchestration.
 
-Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused memory launch APIs. Stage 4 adds selectable multi-pass reduction. Stage 5 adds `GemmProblem`, `GemmVariant`, `GemmBackend`, `GemmDispatch`, sizing/tolerance helpers, CPU reference, and FP32/FP16 launch functions. GEMM calls accept explicit CUDA streams and an externally owned cuBLAS handle so allocation and library state remain visible. Stage 6 adds `SoftmaxVariant`, `RmsNormVariant`, `RopeProblem`, `CausalMaskProblem`, CPU references, elementwise/SwiGLU entry points, and explicit-stream CUDA launch functions. Stage 7 adds fused residual-RMSNorm and SwiGLU entry points. Stage 8 adds `DeviceBuffer<T>`, `CudaStream`, `CudaEvent`, `TensorShape`, `DType`, `Tensor`, `TensorView`, and `DeviceWorkspace`; all benchmark owners use these runtime types, while GEMM adds a checked TensorView overload. Non-GEMM kernels keep their explicit contiguous pointers, dimensions, and streams rather than gaining unused framework-style wrappers.
+Stage 1 exposes `CudaVersions`, `DeviceInfo`, `query_cuda_versions()`, `device_count()`, `query_device()`, and `CUDA_CHECK(...)`. Stage 2 adds validation/result types, CUDA-event measurement, JSON export, and CPU/CUDA VectorAdd entry points. Stage 3 adds focused memory launch APIs. Stage 4 adds selectable multi-pass reduction. Stage 5 adds `GemmProblem`, `GemmVariant`, `GemmBackend`, `GemmDispatch`, sizing/tolerance helpers, CPU reference, and FP32/FP16 launch functions. GEMM calls accept explicit CUDA streams and an externally owned cuBLAS handle so allocation and library state remain visible. Stage 6 adds `SoftmaxVariant`, `RmsNormVariant`, `RopeProblem`, `CausalMaskProblem`, CPU references, elementwise/SwiGLU entry points, and explicit-stream CUDA launch functions. Stage 7 adds fused residual-RMSNorm and SwiGLU entry points. Stage 8 adds `DeviceBuffer<T>`, `CudaStream`, `CudaEvent`, `TensorShape`, `DType`, `Tensor`, `TensorView`, and `DeviceWorkspace`; all benchmark owners use these runtime types, while GEMM adds a checked TensorView overload. Stage 9 adds `AttentionProblem`, `MiniInferConfig`, owning weights/workspace, block execution, deterministic fixture loading, backend selection, and an optional intermediate-validation hook. Non-GEMM kernels keep their explicit contiguous pointers, dimensions, and streams rather than gaining unused framework-style wrappers.
 
 ## Stage boundaries
 
@@ -190,9 +192,9 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 ## Current limitations
 
 - The foundation has been compiled and run only on the audited Windows configuration.
-- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, move-only CUDA ownership, contiguous FP32/FP16 tensor views, reusable workspace, VectorAdd, memory kernels, reduction, row-major GEMM with custom/cuBLAS dispatch, and FP32 Transformer primitives/fusions.
+- The current public API covers device discovery, checked CUDA calls, validation, benchmarking, move-only CUDA ownership, contiguous FP32/FP16 tensor views, reusable workspace, VectorAdd, memory kernels, reduction, row-major GEMM with custom/cuBLAS dispatch, FP32 Transformer primitives/fusions, attention products, and one FP32 MiniInfer block.
 - GEMM currently supports contiguous no-transpose matrices with `alpha=1`, `beta=0`, and FP32 output; it is deliberately not a general BLAS wrapper.
-- Tensor ownership is available, but non-GEMM Transformer kernels still use explicit contiguous pointers/dimensions; attention orchestration and FP16 Transformer variants do not yet exist.
+- MiniInfer orchestration is contiguous FP32 only; non-GEMM Transformer kernels still use explicit pointers/dimensions, and FP16 block execution does not yet exist.
 - Fusion is limited to residual + RMSNorm and SiLU + multiply; attention/GEMM/mask fusion is not implemented.
-- Linux, WSL2, PyTorch, and TensorRT paths remain planned but unvalidated; cuBLAS is validated only for the Stage 5 Windows GEMM path.
+- Linux, WSL2, PyTorch CUDA, and TensorRT paths remain planned but unvalidated. CPU PyTorch 2.14.0 is validated only as the deterministic Stage 9 fixture reference; cuBLAS is validated for GEMM and the complete Windows MiniInfer block.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.

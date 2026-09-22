@@ -1,0 +1,5 @@
+schema_version,file,backend,timing_scope,median_ms,p95_ms,tokens_per_second,max_absolute_error,validation_passed,git_commit
+1,miniinfer_custom_kernel,custom,kernel-sequence-device-resident,1.3219840526580811,1.6640000343322754,96824.163455401387,3.0994415283203125e-06,true,4c4225a
+1,miniinfer_custom_end_to_end,custom,end-to-end-h2d-forward-d2h,1.4675,1.5292599999999998,87223.168654173758,3.0994415283203125e-06,true,4c4225a
+1,miniinfer_cublas_kernel,cublas,kernel-sequence-device-resident,0.73728001117706299,0.76464157402515409,173611.10847919068,2.1457672119140625e-06,true,4c4225a
+1,miniinfer_cublas_end_to_end,cublas,end-to-end-h2d-forward-d2h,0.87150000000000005,0.92720500000000006,146873.20711417097,2.1457672119140625e-06,true,4c4225a

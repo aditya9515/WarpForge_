@@ -38,7 +38,8 @@ WarpForge must:
 | Nsight Systems | 2024.5.1 and 2025.6.3 | Installed; `nsys` absent from `PATH` |
 | Compute Sanitizer | 2024.3.0 | Available on `PATH` |
 | Git | 2.53.0.windows.2 | Available |
-| Python | 3.13.14 | Available |
+| System Python | 3.13.14 | Available |
+| Stage 9 fixture environment | CPython 3.12.13, NumPy 2.3.3, PyTorch 2.14.0+cpu | Repository-local `.venv`; exact packages locked |
 | Docker CLI | 29.6.2 | Available; daemon not validated in Stage 0 |
 
 Dynamic observations such as temperature, utilization, running processes, and current memory usage are intentionally excluded because they are not stable environment requirements.
@@ -65,6 +66,12 @@ Stage 1 activates the Visual Studio developer environment and selects the 14.44 
 - `nsys` is not available on `PATH`. Both installed versions can be invoked by absolute path; one version should be selected deliberately before profiling begins.
 
 These are diagnosed prerequisites, not evidence that the CUDA Toolkit itself is broken.
+
+### Stage 9 PyTorch reference environment
+
+The approved Stage 9 reference environment is isolated in the ignored repository-local `.venv`. It uses uv-managed CPython 3.12.13 because the normal shell's Python 3.13 installation was outside the supported Windows range documented for the selected PyTorch wheel. NumPy 2.3.3 and CPU-only PyTorch 2.14.0 are pinned with their transitive dependencies in `python/requirements-stage9.lock`.
+
+This environment generates and verifies deterministic binary fixtures only. It does not download a model, alter the global Python installation, or provide a PyTorch CUDA performance baseline. A CUDA-enabled PyTorch environment and TensorRT remain separate Stage 10 dependencies that require explicit approval.
 
 ## Supported and planned environments
 
