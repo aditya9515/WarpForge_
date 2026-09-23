@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 10 — NVIDIA library and framework baselines: complete.**
+**Stage 11 — profiler-backed performance analysis: complete.**
 
-The deterministic MiniInfer block now has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. All 31 tests pass, PyTorch validates every named intermediate, both TensorRT engines validate before timing, and ten report records contain 500 measured samples from one clean code commit. Stage 11 will begin only when explicitly requested.
+The deterministic MiniInfer block has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. Stage 11 adds reproducible Nsight Compute/Systems sessions, compact counter and timeline exports, and a [profiler-backed analysis](docs/performance/profiler_analysis.md) of reduction, GEMM, Softmax, RMSNorm, and the full block. All 31 Release tests and Stage 11 result validators pass. Stage 12 will begin only when explicitly requested.
 
 ## Goals
 
@@ -896,3 +896,58 @@ Transfer-inclusive medians are `1.512300 ms` custom, `0.899000 ms` cuBLAS, and `
 ### Next stage
 
 Stage 11 will run reproducible Nsight Compute sessions for baseline/optimized reduction, GEMM, Softmax, and RMSNorm, plus Nsight Systems on MiniInfer. It will connect each bottleneck classification and optimization conclusion to concrete profiler evidence. It will not begin until explicitly requested.
+
+## Stage 11 completion report
+
+### Implemented
+
+- Reproducible Nsight Compute captures for eight baseline/optimized reduction, GEMM, Softmax, and RMSNorm kernels, including launch, occupancy, memory, speed-of-light, warp-state, register/shared-memory, and roofline sections
+- Nsight Systems custom/cuBLAS MiniInfer captures with CUDA API, kernel, copy, and steady-state sequence analysis
+- Compact exported profiler summaries and retrospective baseline → evidence → bottleneck → hypothesis → earlier code change → new metrics → correctness → conclusion analyses
+- Fresh, correctness-gated 50-warmup/500-sample report benchmarks from clean implementation commit `f637452`; no CUDA source or dependency change
+
+### Files and commands
+
+- [Profiler analysis](docs/performance/profiler_analysis.md), a selected profiler-metric figure, [capture commands and methodology](benchmarks/profiles/stage11/README.md), two capture scripts, and compact NCU/NSYS CSV exports under `benchmarks/profiles/stage11/`
+- Thirty per-sample JSON records and three summary CSVs under `benchmarks/results/stage11/`
+- Commands for all captures, exports, benchmarks, and validators are preserved in the profiler reproduction note. Large `.ncu-rep`, `.nsys-rep`, SQLite, and verbose exports remain ignored in `build/profiles/stage11/`.
+
+### Tests and correctness
+
+All 31 Release CTests pass. The reduction, GEMM, and Transformer result validators pass, confirming expected case sets and zero correctness failures. All 30 JSON records have seed `2027`, 50 warmups, 500 stored samples, and source SHA `f637452`. Both PowerShell scripts parse cleanly; the checked-in Nsight Systems script was executed successfully for both MiniInfer backends. NCU hardware counters required a UAC-authorized elevated process, which captured all eight kernels without changing driver settings.
+
+### Benchmarks and measured results
+
+At the report shapes, optimized median versus baseline median is `0.365536` versus `0.991232 ms` for 16,777,216-element FP32 sum (`2.712×`); `1.118208` versus `4.901888 ms` for 1024³ FP32 GEMM (`4.384×`); `0.196608` versus `1.090448 ms` for 4096 × 1024 Softmax (`5.546×`); and `0.197632` versus `0.882688 ms` for RMSNorm (`4.466×`). The custom register-blocked GEMM is still only `51.74%` of cuBLAS FP32 throughput at 1024³.
+
+NCU counters support a barrier/predication-limited interleaved reduction becoming DRAM-throughput-limited after warp shuffles; a naive GEMM limited by load/store instruction issue rather than peak FP32 math; and low-parallelism naive Softmax/RMSNorm becoming high-occupancy, bandwidth-heavy block/warp kernels. The instrumented durations are deliberately not used as report benchmark medians.
+
+The last five traced MiniInfer passes use one stream without GPU overlap. The custom path has median `1,788.283 µs` GPU H2D → forward → D2H span, versus `1,049.532 µs` for cuBLAS under instrumentation. Custom projection GEMMs occupy about `68.2%` of its kernel time; after switching to cuBLAS, attention-score computation is the largest contributor at about `42.0%`. This identifies where time goes, not the attention kernel's hardware root cause. The uninstrumented Stage 10 end-to-end numbers remain the comparable application latencies.
+
+### Concepts learned
+
+- SM-throughput saturation is not equivalent to FP32 arithmetic saturation; the responsible instruction pipe and roofline evidence matter.
+- Lower occupancy can accompany a faster kernel when reuse, fewer passes, or lower synchronization cost dominate.
+- A timeline identifies time contributors and non-overlap, but it cannot by itself classify a kernel as memory- or compute-bound.
+- Pageable D2H API time can include waiting for queued GPU work and must not be counted as standalone transfer overhead.
+
+### Known limitations
+
+- Evidence covers one Windows laptop GPU, fixed report shapes, unlocked clocks, and five traced MiniInfer passes per backend; it is not a device-independent ranking.
+- NCU replays/instrumentation and NSYS tracing perturb duration, so profiler times are separate from uninstrumented 500-sample medians.
+- MiniInfer's smaller projection GEMMs and attention-score kernel were not individually counter-profiled. Their timeline time shares do not establish hardware bottleneck categories.
+- GPU idle gaps are visible, but the trace does not isolate host dispatch, library, scheduling, and synchronization contributions.
+- Stage 11 is analysis of existing kernels; no new optimization is claimed.
+
+### Commits
+
+- `f8f1b2d perf: document Stage 11 profiler evidence`
+- `docs: complete Stage 11 report` (this completion-report commit)
+
+### Definition of Done
+
+**PASS.** Every requested kernel pair has a correctness-gated uninstrumented report benchmark and reproducible NCU evidence; both MiniInfer GEMM backends have NSYS API/kernel/copy/stream traces; interpretations distinguish measured facts from hypotheses; large raw artifacts are excluded from Git. The completed stage is committed and pushed to `main` after final remote verification.
+
+### Next stage
+
+Stage 12 will add production hardening: formatting, warning-clean builds, expanded tests, Compute Sanitizer workflows, CPU-only CMake and hosted CI, honest Windows/Linux portability documentation, MIT licensing, and polished release materials. Missing Linux/WSL packages or material environment changes will require separate approval. Stage 12 will not begin until explicitly requested.

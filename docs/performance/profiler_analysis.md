@@ -6,6 +6,8 @@ This is a retrospective analysis of the already-correct optimization ladders and
 
 The machine is an RTX 3050 Laptop GPU, CC 8.6, 4 GB VRAM, Windows, CUDA Toolkit 12.6.85, Nsight Compute 2024.3.2, and Nsight Systems 2025.6.3. Clocks were not locked. NCU performance-counter access needed an elevated process (`ERR_NVGPUCTRPERM` otherwise); no system-wide counter setting was changed. Exact capture/export commands and compact [NCU](../../benchmarks/profiles/stage11/ncu_summary.csv) and [NSYS](../../benchmarks/profiles/stage11/nsys_steady_state.csv) data are in [the reproducibility note](../../benchmarks/profiles/stage11/README.md). Large raw reports stay in ignored `build/profiles/stage11/`.
 
+![Selected Nsight Compute throughput metrics for four optimization pairs](stage11_profiler_metrics.svg)
+
 ## Report timings and correctness
 
 | Workload | Baseline median / p95 | Optimized median / p95 | Median speedup | Validation |

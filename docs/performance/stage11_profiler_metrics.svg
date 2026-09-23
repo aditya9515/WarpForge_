@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="585" viewBox="0 0 1100 585" role="img" aria-labelledby="title description">
+  <title id="title">Stage 11 Nsight Compute throughput comparison</title>
+  <desc id="description">Paired baseline and optimized bars for four workloads. DRAM peak percentages: reduction 24.83 and 87.34; GEMM 21.57 and 8.58; Softmax 25.07 and 78.84; RMSNorm 23.32 and 78.99. SM peak percentages: reduction 82.58 and 65.73; GEMM 97.00 and 57.36; Softmax 3.75 and 55.79; RMSNorm 4.33 and 65.43.</desc>
+  <rect width="1100" height="585" fill="#ffffff"/>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #182536; }
+    .title { font-size: 25px; font-weight: 700; }
+    .subtitle { font-size: 14px; fill: #526273; }
+    .group { font-size: 17px; font-weight: 700; }
+    .row { font-size: 13px; }
+    .heading { font-size: 15px; font-weight: 700; }
+    .value { font-size: 13px; font-weight: 700; }
+    .note { font-size: 12px; fill: #526273; }
+  </style>
+  <text x="36" y="40" class="title">Profiler throughput: baseline → optimized</text>
+  <text x="36" y="65" class="subtitle">RTX 3050 Laptop GPU · Nsight Compute 2024.3.2 · one instrumented kernel launch per variant</text>
+  <rect x="38" y="81" width="15" height="15" rx="2" fill="#90a5bb"/>
+  <text x="60" y="94" class="row">baseline</text>
+  <rect x="136" y="81" width="15" height="15" rx="2" fill="#087e79"/>
+  <text x="158" y="94" class="row">optimized</text>
+  <text x="225" y="121" class="heading">DRAM throughput (% of peak)</text>
+  <text x="660" y="121" class="heading">SM throughput (% of peak)</text>
+  <line x1="225" y1="129" x2="225" y2="514" stroke="#c7d2de"/>
+  <line x1="525" y1="129" x2="525" y2="514" stroke="#c7d2de"/>
+  <line x1="660" y1="129" x2="660" y2="514" stroke="#c7d2de"/>
+  <line x1="960" y1="129" x2="960" y2="514" stroke="#c7d2de"/>
+  <text x="225" y="532" class="note">0%</text>
+  <text x="500" y="532" class="note">100%</text>
+  <text x="660" y="532" class="note">0%</text>
+  <text x="935" y="532" class="note">100%</text>
+
+  <text x="36" y="161" class="group">Reduction sum</text>
+  <text x="36" y="185" class="row">interleaved</text>
+  <text x="36" y="211" class="row">warp shuffle</text>
+  <rect x="225" y="171" width="74.49" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="225" y="197" width="262.02" height="18" rx="3" fill="#087e79"/>
+  <text x="305" y="185" class="value">24.83%</text>
+  <text x="493" y="211" class="value">87.34%</text>
+  <rect x="660" y="171" width="247.74" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="660" y="197" width="197.19" height="18" rx="3" fill="#087e79"/>
+  <text x="914" y="185" class="value">82.58%</text>
+  <text x="864" y="211" class="value">65.73%</text>
+
+  <line x1="36" y1="228" x2="1050" y2="228" stroke="#e7edf2"/>
+  <text x="36" y="256" class="group">GEMM FP32</text>
+  <text x="36" y="280" class="row">naive</text>
+  <text x="36" y="306" class="row">register blocked</text>
+  <rect x="225" y="266" width="64.71" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="225" y="292" width="25.74" height="18" rx="3" fill="#087e79"/>
+  <text x="296" y="280" class="value">21.57%</text>
+  <text x="257" y="306" class="value">8.58%</text>
+  <rect x="660" y="266" width="291" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="660" y="292" width="172.08" height="18" rx="3" fill="#087e79"/>
+  <text x="958" y="280" class="value">97.00%</text>
+  <text x="839" y="306" class="value">57.36%</text>
+
+  <line x1="36" y1="323" x2="1050" y2="323" stroke="#e7edf2"/>
+  <text x="36" y="351" class="group">Softmax</text>
+  <text x="36" y="375" class="row">naive</text>
+  <text x="36" y="401" class="row">warp</text>
+  <rect x="225" y="361" width="75.21" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="225" y="387" width="236.52" height="18" rx="3" fill="#087e79"/>
+  <text x="307" y="375" class="value">25.07%</text>
+  <text x="468" y="401" class="value">78.84%</text>
+  <rect x="660" y="361" width="11.25" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="660" y="387" width="167.37" height="18" rx="3" fill="#087e79"/>
+  <text x="678" y="375" class="value">3.75%</text>
+  <text x="834" y="401" class="value">55.79%</text>
+
+  <line x1="36" y1="418" x2="1050" y2="418" stroke="#e7edf2"/>
+  <text x="36" y="446" class="group">RMSNorm</text>
+  <text x="36" y="470" class="row">naive</text>
+  <text x="36" y="496" class="row">block</text>
+  <rect x="225" y="456" width="69.96" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="225" y="482" width="236.97" height="18" rx="3" fill="#087e79"/>
+  <text x="301" y="470" class="value">23.32%</text>
+  <text x="468" y="496" class="value">78.99%</text>
+  <rect x="660" y="456" width="12.99" height="18" rx="3" fill="#90a5bb"/>
+  <rect x="660" y="482" width="196.29" height="18" rx="3" fill="#087e79"/>
+  <text x="680" y="470" class="value">4.33%</text>
+  <text x="863" y="496" class="value">65.43%</text>
+
+  <text x="36" y="563" class="note">Throughput percentage is a utilization counter, not a speedup. GEMM improves while both displayed percentages fall because data reuse reduces work.</text>
+</svg>

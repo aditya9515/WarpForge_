@@ -5,7 +5,7 @@ These commands profile clean implementation commit `f637452` on the RTX 3050 Lap
 Run the 31 Release CTests and the existing result validators before interpreting a profile. The exact eight Nsight Compute configurations are in [`capture_ncu.ps1`](capture_ncu.ps1); the two MiniInfer timeline configurations are in [`capture_nsys.ps1`](capture_nsys.ps1). Both scripts resolve the repository from their own location and keep raw output under ignored `build/profiles/stage11/`. They accept an executable-path override on another machine. `capture_ncu.ps1` uses `--set full`, selecting launch, occupancy, memory-workload, speed-of-light, warp-state, register/shared-memory, and roofline sections, and captures one matching launch per case.
 
 ```powershell
-ctest --test-dir build -C Release --output-on-failure
+& 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe' --test-dir build -C Release --output-on-failure
 powershell -NoProfile -ExecutionPolicy Bypass -File benchmarks\profiles\stage11\capture_nsys.ps1
 ```
 
