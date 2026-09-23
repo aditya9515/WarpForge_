@@ -86,6 +86,26 @@ An optimization is not accepted because it should be faster. It is accepted only
 
 Stages are implemented one at a time. Completing one stage does not authorize work on the next.
 
+## Portfolio snapshot
+
+WarpForge pairs inspectable CUDA kernels with trusted references, CUDA-event benchmarks, Nsight evidence, and a bounded one-block MiniInfer runtime. The strongest custom FP32 GEMM at 1024³ remains below cuBLAS (51.74% of its throughput); that comparison is a result, not a target to hide. The fixed-shape MiniInfer comparison also includes eager PyTorch CUDA and validated TensorRT FP32/mixed-FP16 engines. All measurements cited here are from the disclosed RTX 3050 Laptop GPU, with timing boundaries specified in their linked reports.
+
+![Selected Stage 11 optimization-ladder speedups, derived from measured CUDA-event medians](docs/performance/stage12_latency.svg)
+
+The [release summary CSV](benchmarks/results/stage12/release_summary.csv) records the exact baseline/optimized medians and source commit for this plot. It is a derived view of Stage 11 results, not a new Stage 12 benchmark. The [profiler analysis](docs/performance/profiler_analysis.md) explains why those changes helped and where MiniInfer still spends time.
+
+## CPU-only build and CI boundary
+
+The default build enables CUDA. For a C++17 validation/statistics build that requires no CUDA Toolkit or GPU, configure with `-DWARPFORGE_ENABLE_CUDA=OFF`:
+
+```sh
+cmake -S . -B out/cpu -DWARPFORGE_ENABLE_CUDA=OFF -DWARPFORGE_WARNINGS_AS_ERRORS=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build out/cpu --config Release
+ctest --test-dir out/cpu -C Release --output-on-failure
+```
+
+On the audited Windows host, first enter the MSVC 14.44 developer shell below, then use `cmake --preset windows-msvc-cpu`, `cmake --build --preset windows-msvc-cpu`, and `ctest --preset windows-msvc-cpu`. This NMake preset avoids the OneDrive/Ninja stall seen earlier. The hosted [CPU workflow](.github/workflows/cpu.yml) uses Windows and Linux runners for CPU compilation, tests, Python syntax, documentation, and plot checks; it does not run CUDA. A `.clang-format` policy and check script are present, but the local formatting check and hosted gate await approval to install a pinned formatter. GPU validation stays in the local [Windows driver](scripts/test_gpu_windows.ps1) or the manually triggered [self-hosted workflow](.github/workflows/gpu-self-hosted.yml) on a separately configured NVIDIA machine. Details and platform limits are in the [release notes](docs/release.md).
+
 ## Build and verify on the audited Windows machine
 
 CUDA 12.6 must use the installed MSVC 14.44 toolset rather than the newer default MSVC 19.51. From PowerShell, open a child command shell with that toolset selected:
@@ -174,6 +194,8 @@ See [docs/requirements.md](docs/requirements.md) for compatibility findings and 
 - [WarpForge GPU runtime](docs/performance/runtime.md)
 - [MiniInfer single Transformer block](docs/performance/miniinfer.md)
 - [MiniInfer library and framework baselines](docs/performance/baselines.md)
+- [Profiler-backed performance analysis](docs/performance/profiler_analysis.md)
+- [Release, CI, and portability notes](docs/release.md)
 - [Benchmark JSON schema v1](benchmarks/schema/v1.json)
 
 ## Stage 0 completion report

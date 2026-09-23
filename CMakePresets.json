@@ -20,7 +20,26 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CUDA_ARCHITECTURES": "86",
-        "CMAKE_CUDA_FLAGS": "--use-local-env"
+        "CMAKE_CUDA_FLAGS": "--use-local-env",
+        "WARPFORGE_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc-cpu",
+      "displayName": "Windows MSVC CPU-only Release",
+      "description": "CUDA-free compile and CPU/fixture tests from an MSVC developer environment.",
+      "generator": "NMake Makefiles",
+      "binaryDir": "${sourceDir}/out/cpu-windows",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "ON",
+        "WARPFORGE_ENABLE_CUDA": "OFF",
+        "WARPFORGE_WARNINGS_AS_ERRORS": "ON"
       }
     }
   ],
@@ -28,12 +47,23 @@
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc-release"
+    },
+    {
+      "name": "windows-msvc-cpu",
+      "configurePreset": "windows-msvc-cpu"
     }
   ],
   "testPresets": [
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-msvc-cpu",
+      "configurePreset": "windows-msvc-cpu",
       "output": {
         "outputOnFailure": true
       }

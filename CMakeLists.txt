@@ -1,14 +1,16 @@
 cmake_minimum_required(VERSION 3.24)
 
+option(WARPFORGE_ENABLE_CUDA "Build CUDA kernels, applications, and GPU tests" ON)
+option(WARPFORGE_WARNINGS_AS_ERRORS "Treat project compiler warnings as errors" OFF)
+
 project(
     WarpForge
     VERSION 0.1.0
     DESCRIPTION "CUDA kernel engineering and compact inference runtime"
-    LANGUAGES CXX CUDA
+    LANGUAGES CXX
 )
 
 include(CTest)
-find_package(CUDAToolkit 12.6 REQUIRED)
 
 set(WARPFORGE_GIT_COMMIT "unknown")
 find_package(Git QUIET)
@@ -22,10 +24,6 @@ if(Git_FOUND)
     )
 endif()
 
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 86 CACHE STRING "CUDA architectures to build for")
-endif()
-
 function(warpforge_enable_warnings target)
     if(MSVC)
         target_compile_options(
@@ -35,6 +33,14 @@ function(warpforge_enable_warnings target)
                 $<$<COMPILE_LANGUAGE:CXX>:/permissive->
                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/W4>
         )
+        if(WARPFORGE_WARNINGS_AS_ERRORS)
+            target_compile_options(
+                ${target}
+                PRIVATE
+                    $<$<COMPILE_LANGUAGE:CXX>:/WX>
+                    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/WX>
+            )
+        endif()
     else()
         target_compile_options(
             ${target}
@@ -42,8 +48,61 @@ function(warpforge_enable_warnings target)
                 $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>
                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Wall,-Wextra,-Wpedantic>
         )
+        if(WARPFORGE_WARNINGS_AS_ERRORS)
+            target_compile_options(
+                ${target}
+                PRIVATE
+                    $<$<COMPILE_LANGUAGE:CXX>:-Werror>
+                    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Werror>
+            )
+        endif()
     endif()
 endfunction()
+
+add_library(warpforge_cpu STATIC src/validation.cpp src/benchmark_statistics.cpp)
+add_library(WarpForge::cpu ALIAS warpforge_cpu)
+target_compile_features(warpforge_cpu PUBLIC cxx_std_17)
+target_include_directories(
+    warpforge_cpu
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+warpforge_enable_warnings(warpforge_cpu)
+
+if(BUILD_TESTING)
+    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+
+    add_executable(warpforge_validation_test tests/cpu/validation_test.cpp)
+    target_link_libraries(warpforge_validation_test PRIVATE WarpForge::cpu)
+    warpforge_enable_warnings(warpforge_validation_test)
+
+    add_executable(warpforge_benchmark_statistics_test tests/cpu/benchmark_statistics_test.cpp)
+    target_link_libraries(warpforge_benchmark_statistics_test PRIVATE WarpForge::cpu)
+    warpforge_enable_warnings(warpforge_benchmark_statistics_test)
+
+    add_test(NAME cpu.validation COMMAND warpforge_validation_test)
+    add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
+    add_test(
+        NAME fixture.miniinfer_small
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_miniinfer_fixture.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/miniinfer_small
+    )
+    set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
+    set_tests_properties(fixture.miniinfer_small PROPERTIES LABELS "fixture;python")
+endif()
+
+if(NOT WARPFORGE_ENABLE_CUDA)
+    message(STATUS "WarpForge CPU-only mode: CUDA targets and GPU tests are disabled")
+    return()
+endif()
+
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 86 CACHE STRING "CUDA architectures to build for")
+endif()
+enable_language(CUDA)
+find_package(CUDAToolkit 12.6 REQUIRED)
 
 add_library(
     warpforge
@@ -65,7 +124,6 @@ add_library(
         src/miniinfer/miniinfer.cu
         src/runtime/device.cu
         src/runtime/runtime.cu
-        src/validation.cpp
 )
 add_library(WarpForge::warpforge ALIAS warpforge)
 
@@ -75,7 +133,7 @@ target_include_directories(
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
-target_link_libraries(warpforge PUBLIC CUDA::cudart CUDA::cublas)
+target_link_libraries(warpforge PUBLIC WarpForge::cpu CUDA::cudart CUDA::cublas)
 target_compile_definitions(
     warpforge
     PRIVATE
@@ -144,16 +202,6 @@ target_link_libraries(warpforge_miniinfer PRIVATE WarpForge::warpforge)
 warpforge_enable_warnings(warpforge_miniinfer)
 
 if(BUILD_TESTING)
-    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
-
-    add_executable(warpforge_validation_test tests/cpu/validation_test.cpp)
-    target_link_libraries(warpforge_validation_test PRIVATE WarpForge::warpforge)
-    warpforge_enable_warnings(warpforge_validation_test)
-
-    add_executable(warpforge_benchmark_statistics_test tests/cpu/benchmark_statistics_test.cpp)
-    target_link_libraries(warpforge_benchmark_statistics_test PRIVATE WarpForge::warpforge)
-    warpforge_enable_warnings(warpforge_benchmark_statistics_test)
-
     add_executable(warpforge_cuda_smoke tests/cuda/runtime_smoke_test.cpp)
     set_target_properties(warpforge_cuda_smoke PROPERTIES OUTPUT_NAME "warpforge-cuda-smoke")
     target_link_libraries(warpforge_cuda_smoke PRIVATE WarpForge::warpforge)
@@ -211,8 +259,6 @@ if(BUILD_TESTING)
     target_link_libraries(warpforge_miniinfer_test PRIVATE WarpForge::warpforge)
     warpforge_enable_warnings(warpforge_miniinfer_test)
 
-    add_test(NAME cpu.validation COMMAND warpforge_validation_test)
-    add_test(NAME cpu.benchmark_statistics COMMAND warpforge_benchmark_statistics_test)
     add_test(NAME cuda.runtime_smoke COMMAND warpforge_cuda_smoke)
     add_test(NAME cuda.runtime COMMAND warpforge_runtime_test)
     add_test(NAME cuda.vector_add COMMAND warpforge_vector_add_test)
@@ -230,13 +276,6 @@ if(BUILD_TESTING)
         NAME cuda.miniinfer
         COMMAND
             warpforge_miniinfer_test
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/miniinfer_small
-    )
-    add_test(
-        NAME fixture.miniinfer_small
-        COMMAND
-            ${Python3_EXECUTABLE}
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/validate_miniinfer_fixture.py
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/miniinfer_small
     )
     add_test(
@@ -366,7 +405,6 @@ if(BUILD_TESTING)
             ${CMAKE_CURRENT_BINARY_DIR}/test-results/miniinfer
     )
 
-    set_tests_properties(cpu.validation cpu.benchmark_statistics PROPERTIES LABELS "cpu;unit")
     set_tests_properties(cuda.runtime_smoke PROPERTIES LABELS "cuda;smoke")
     set_tests_properties(cuda.runtime PROPERTIES LABELS "cuda;runtime;correctness")
     set_tests_properties(
@@ -375,7 +413,6 @@ if(BUILD_TESTING)
         cuda.elementwise cuda.causal_mask cuda.fusion cuda.attention cuda.miniinfer
         PROPERTIES LABELS "cuda;correctness"
     )
-    set_tests_properties(fixture.miniinfer_small PROPERTIES LABELS "fixture;python")
     set_tests_properties(
         benchmark.vector_add benchmark.memory benchmark.reduction benchmark.gemm
         benchmark.transformer

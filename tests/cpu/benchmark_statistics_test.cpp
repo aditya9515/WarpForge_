@@ -1,9 +1,10 @@
-#include <warpforge/benchmark.hpp>
+#include <warpforge/benchmark_statistics.hpp>
 
 #include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -54,6 +55,24 @@ int main() {
         }
         if (!negative_threw) {
             throw std::runtime_error("negative samples should throw");
+        }
+
+        const auto zeros = warpforge::summarize_samples({0.0, 0.0, 0.0});
+        require_close(zeros.p95_ms, 0.0, 0.0, "zero samples should remain zero");
+        require_close(zeros.standard_deviation_ms, 0.0, 0.0, "zero deviation mismatch");
+
+        for (const double invalid : {
+                 std::numeric_limits<double>::quiet_NaN(),
+                 std::numeric_limits<double>::infinity()}) {
+            bool invalid_threw = false;
+            try {
+                static_cast<void>(warpforge::summarize_samples({1.0, invalid}));
+            } catch (const std::invalid_argument&) {
+                invalid_threw = true;
+            }
+            if (!invalid_threw) {
+                throw std::runtime_error("non-finite samples should throw");
+            }
         }
 
         std::cout << "Benchmark statistics tests passed\n";

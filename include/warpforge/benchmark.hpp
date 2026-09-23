@@ -1,5 +1,6 @@
 #pragma once
 
+#include <warpforge/benchmark_statistics.hpp>
 #include <warpforge/validation.hpp>
 
 #include <cuda_runtime_api.h>
@@ -19,15 +20,6 @@ struct BenchmarkConfig final {
     std::size_t warmup_iterations{10};
     std::size_t measurement_iterations{100};
     std::uint64_t seed{2027};
-};
-
-struct BenchmarkStatistics final {
-    std::size_t sample_count{};
-    double minimum_ms{};
-    double mean_ms{};
-    double median_ms{};
-    double p95_ms{};
-    double standard_deviation_ms{};
 };
 
 struct LaunchConfiguration final {
@@ -66,8 +58,6 @@ struct BenchmarkResult final {
 };
 
 using CudaWork = std::function<void(cudaStream_t)>;
-
-[[nodiscard]] BenchmarkStatistics summarize_samples(const std::vector<double>& samples_ms);
 
 [[nodiscard]] std::vector<double> measure_cuda_kernel(
     const BenchmarkConfig& config,

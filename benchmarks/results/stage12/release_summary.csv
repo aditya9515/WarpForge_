@@ -1,0 +1,5 @@
+workload,baseline,optimized,baseline_median_ms,optimized_median_ms,speedup,source_commit,source_csv
+FP32 sum,naive_interleaved,warp_shuffle,0.991232,0.365536,2.711722,f637452,benchmarks/results/stage11/reduction/summary.csv
+FP32 GEMM,custom_naive_fp32,custom_register_blocked_fp32,4.901888,1.118208,4.383699,f637452,benchmarks/results/stage11/gemm/summary.csv
+Softmax,naive,warp,1.090448,0.196608,5.546305,f637452,benchmarks/results/stage11/transformer/summary.csv
+RMSNorm,naive,block,0.882688,0.197632,4.466321,f637452,benchmarks/results/stage11/transformer/summary.csv

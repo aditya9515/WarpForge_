@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="365" viewBox="0 0 840 365" role="img" aria-labelledby="title description">
+<title id="title">WarpForge baseline-to-optimized median speedups</title>
+<desc id="description">Four CUDA-event benchmark comparisons on the RTX 3050 Laptop GPU.</desc>
+<rect width="840" height="365" fill="#ffffff"/>
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#172536}.heading{font-size:23px;font-weight:700}.sub{font-size:13px;fill:#536477}.label{font-size:16px;font-weight:700}.value{font-size:15px;font-weight:700}.foot{font-size:12px;fill:#536477}</style>
+<text x="35" y="40" class="heading">Optimization ladders: measured median speedup</text>
+<text x="35" y="64" class="sub">FP32 · RTX 3050 Laptop GPU · 50 warmups / 500 samples · kernel-only timing</text>
+<text x="35" y="125" class="label">FP32 sum</text>
+<rect x="180" y="108" width="216.94" height="25" rx="4" fill="#087e79"/>
+<text x="406.94" y="126" class="value">2.71×</text>
+<text x="35" y="181" class="label">FP32 GEMM</text>
+<rect x="180" y="164" width="350.70" height="25" rx="4" fill="#087e79"/>
+<text x="540.70" y="182" class="value">4.38×</text>
+<text x="35" y="237" class="label">Softmax</text>
+<rect x="180" y="220" width="443.70" height="25" rx="4" fill="#087e79"/>
+<text x="633.70" y="238" class="value">5.55×</text>
+<text x="35" y="293" class="label">RMSNorm</text>
+<rect x="180" y="276" width="357.31" height="25" rx="4" fill="#087e79"/>
+<text x="547.31" y="294" class="value">4.47×</text>
+<text x="35" y="337" class="foot">Derived from committed Stage 11 CSVs; this is not a new Stage 12 timing run.</text>
+</svg>

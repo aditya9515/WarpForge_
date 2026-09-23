@@ -12,8 +12,9 @@ ValidationResult validate_fp32(
     const float* actual,
     const std::size_t element_count,
     const Tolerance tolerance) {
-    if (tolerance.absolute < 0.0 || tolerance.relative < 0.0) {
-        throw std::invalid_argument("validation tolerances must be non-negative");
+    if (!std::isfinite(tolerance.absolute) || !std::isfinite(tolerance.relative) ||
+        tolerance.absolute < 0.0 || tolerance.relative < 0.0) {
+        throw std::invalid_argument("validation tolerances must be finite and non-negative");
     }
     if (element_count > 0 && (expected == nullptr || actual == nullptr)) {
         throw std::invalid_argument("validation inputs must not be null for a non-empty range");

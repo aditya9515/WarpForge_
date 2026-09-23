@@ -1,0 +1,46 @@
+name: CPU build, tests, and repository checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    name: CPU-only ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            generator: Unix Makefiles
+          - os: windows-2022
+            generator: Visual Studio 17 2022
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Configure without CUDA
+        shell: pwsh
+        run: >-
+          cmake -S . -B out/ci -G "${{ matrix.generator }}"
+          -DWARPFORGE_ENABLE_CUDA=OFF
+          -DWARPFORGE_WARNINGS_AS_ERRORS=ON
+          -DBUILD_TESTING=ON
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Compile CPU library and tests
+        run: cmake --build out/ci --config Release --parallel 2
+      - name: Run CPU and fixture tests
+        run: ctest --test-dir out/ci -C Release --output-on-failure
+      - name: Check Python syntax
+        run: python -m compileall -q python tests/python scripts
+      - name: Check documentation, JSON, and artifact policy
+        run: python scripts/check_repository.py
+      - name: Verify committed measured-results plot
+        run: python scripts/plot_benchmarks.py --check

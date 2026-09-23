@@ -42,7 +42,8 @@ WarpForge must:
 | Stage 9 fixture environment | CPython 3.12.13, NumPy 2.3.3, PyTorch 2.14.0+cpu | Repository-local `.venv`; exact packages locked |
 | Stage 10 baseline environment | CPython 3.12.13, NumPy 2.3.3, PyTorch 2.14.0+cu126, ONNX 1.16.0 | Repository-local `.venv-stage10`; exact packages locked |
 | TensorRT | 10.7.0.23 Windows CUDA 12.6 SDK and `trtexec` | Repository-local `.stage10-tools`; validated, ignored by Git |
-| Docker CLI | 29.6.2 | Available; daemon not validated in Stage 0 |
+| Docker CLI | 29.6.2 | Available; Docker Desktop Linux daemon unavailable at Stage 12 check |
+| WSL2 | Ubuntu 24.04.1 on Linux 6.6.87.2 | Distro available; Python 3 and NVIDIA driver utility path visible; CMake/C++/Linux CUDA Toolkit absent |
 
 Dynamic observations such as temperature, utilization, running processes, and current memory usage are intentionally excluded because they are not stable environment requirements.
 
@@ -91,6 +92,14 @@ The ignored `.stage10-tools` directory contains TensorRT 10.7.0.23 and `trtexec`
 - CUDA Toolkit 12.6
 - MSVC 19.44 selected from Visual Studio Build Tools
 - Primary device architecture `sm_86`
+
+### Stage 12 CPU-only verification
+
+- Windows MSVC 19.44 builds the CUDA-free `WarpForge::cpu` library with warnings as errors and passes its three CPU/fixture CTests.
+- The default Windows CUDA build remains warning-clean with CUDA 12.6.85 and passes all 31 CTests plus focused Compute Sanitizer checks.
+- Hosted GitHub Actions configurations compile/test CPU-only on Windows and Linux. A workflow definition is not a successful remote run; GPU tests remain local or opt-in self-hosted only.
+- Ubuntu WSL2 lacks `cmake` and a C++ compiler, so Linux CPU execution waits for separate installation approval. No Linux CUDA validation is claimed.
+- Docker Desktop's Linux daemon is unavailable; a Docker development image is deferred instead of committed untested.
 
 ### Planned, not yet validated
 

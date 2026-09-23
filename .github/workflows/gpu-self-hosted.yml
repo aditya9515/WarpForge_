@@ -1,0 +1,17 @@
+name: GPU verification (opt-in self-hosted)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gpu:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, windows, x64, warpforge-gpu]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build, test, and sanitize on configured GPU host
+        shell: pwsh
+        run: ./scripts/test_gpu_windows.ps1 -RunSanitizer

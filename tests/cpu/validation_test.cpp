@@ -60,6 +60,22 @@ void test_non_finite_and_invalid_inputs() {
     }
     require(invalid_tolerance_threw, "negative tolerances should throw");
 
+    bool non_finite_tolerance_threw = false;
+    try {
+        static_cast<void>(warpforge::validate_fp32(expected, actual, 2, {nan, 0.0}));
+    } catch (const std::invalid_argument&) {
+        non_finite_tolerance_threw = true;
+    }
+    require(non_finite_tolerance_threw, "NaN tolerances should throw");
+
+    non_finite_tolerance_threw = false;
+    try {
+        static_cast<void>(warpforge::validate_fp32(expected, actual, 2, {0.0, infinity}));
+    } catch (const std::invalid_argument&) {
+        non_finite_tolerance_threw = true;
+    }
+    require(non_finite_tolerance_threw, "infinite tolerances should throw");
+
     bool null_input_threw = false;
     try {
         static_cast<void>(warpforge::validate_fp32(nullptr, actual, 1));
