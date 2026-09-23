@@ -6,9 +6,9 @@ The project is aimed at learning and demonstrating production-minded GPU enginee
 
 ## Current status
 
-**Stage 11 — profiler-backed performance analysis: complete.**
+**Stage 12 — release hardening: in progress.**
 
-The deterministic MiniInfer block has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. Stage 11 adds reproducible Nsight Compute/Systems sessions, compact counter and timeline exports, and a [profiler-backed analysis](docs/performance/profiler_analysis.md) of reduction, GEMM, Softmax, RMSNorm, and the full block. All 31 Release tests and Stage 11 result validators pass. Stage 12 will begin only when explicitly requested.
+The deterministic MiniInfer block has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. Stage 11 added a [profiler-backed analysis](docs/performance/profiler_analysis.md). Stage 12 now has a CUDA-free CPU library, warning-clean local Windows builds, all 31 local CUDA CTests and focused Compute Sanitizer checks passing, and a [hosted CPU CI run](https://github.com/aditya9515/WarpForge_/actions/runs/35818970719) passing on Ubuntu 24.04 and Windows Server 2022. Formatting verification and local WSL package installation still await separate approval; Stage 12 is not yet marked complete.
 
 ## Goals
 
