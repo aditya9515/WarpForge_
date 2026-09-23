@@ -1,0 +1,3 @@
+backend,passes,stream,events_per_pass,median_gpu_span_us,median_gpu_kernel_us,median_gpu_copy_us,median_gpu_idle_gap_us,median_largest_interoperation_gap_us,median_cpu_h2d_to_d2h_api_span_us,kernel_launches_per_pass,median_launch_api_us,median_post_copy_stream_sync_api_us
+custom,5,13,20,1788.283,1627.707,59.264,101.983,40.256,1844.788,18,5.350,4.885
+cublas,5,13,27,1049.532,884.349,66.240,99.167,29.216,1100.862,23,5.522,6.254

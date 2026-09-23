@@ -1,0 +1,9 @@
+kernel,shape,profiled_scope,instrumented_duration_us,dram_bandwidth_gbps,dram_peak_pct,sm_peak_pct,achieved_occupancy_pct,registers_per_thread,shared_memory_bytes_per_block,fp32_ffma_thread_instructions_per_cycle,dominant_warp_stall,dominant_stall_cycles_per_issue
+reduction_interleaved,16777216 elements,first pass,2095.040,38.949,24.83,82.58,90.00,16,1024,0,barrier,8.65
+reduction_warp_shuffle,16777216 elements,first pass,401.440,170.709,87.34,65.73,74.39,16,32,0,long scoreboard,14.83
+gemm_naive,1024x1024x1024,one kernel,7405.888,39.846,21.57,97.00,99.04,34,0,123.97,long scoreboard,12.93
+gemm_register_blocked,1024x1024x1024,one kernel,1503.232,16.775,8.58,57.36,66.42,56,8512,579.59,long scoreboard,4.33
+softmax_naive,4096x1024,one kernel,1463.904,49.006,25.07,3.75,16.57,25,0,20.86,long scoreboard,49.52
+softmax_warp,4096x1024,one kernel,218.048,154.080,78.84,55.79,94.71,23,144,69.92,long scoreboard,9.93
+rmsnorm_naive,4096x1024,one kernel,1243.808,45.576,23.32,4.33,16.50,20,0,2.78,long scoreboard,103.81
+rmsnorm_block,4096x1024,one kernel,217.216,154.322,78.99,65.43,93.36,18,1024,35.06,long scoreboard,11.65
