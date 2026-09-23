@@ -37,7 +37,7 @@ void expect_throw(Function&& function, const std::string& message) {
 }
 
 class CublasHandle final {
-public:
+  public:
     CublasHandle() {
         if (cublasCreate(&handle_) != CUBLAS_STATUS_SUCCESS) {
             throw std::runtime_error("cublasCreate failed");
@@ -53,9 +53,11 @@ public:
     CublasHandle(const CublasHandle&) = delete;
     CublasHandle& operator=(const CublasHandle&) = delete;
 
-    [[nodiscard]] cublasHandle_t get() const noexcept { return handle_; }
+    [[nodiscard]] cublasHandle_t get() const noexcept {
+        return handle_;
+    }
 
-private:
+  private:
     cublasHandle_t handle_{nullptr};
 };
 
@@ -66,15 +68,15 @@ void test_shape_and_dtype() {
     expect(shape.element_count() == 30U, "TensorShape element count mismatch");
     expect(shape.byte_size(warpforge::DType::fp32) == 120U, "FP32 byte count mismatch");
     expect(shape.byte_size(warpforge::DType::fp16) == 60U, "FP16 byte count mismatch");
-    expect(std::string(warpforge::dtype_name(warpforge::DType::fp32)) == "fp32", "dtype name mismatch");
+    expect(std::string(warpforge::dtype_name(warpforge::DType::fp32)) == "fp32",
+           "dtype name mismatch");
 
     const warpforge::TensorShape empty;
     const warpforge::TensorShape zero_extent{4U, 0U, 9U};
     expect(empty.empty() && zero_extent.empty(), "zero-element shapes must be empty");
     expect_throw<std::overflow_error>(
         [] {
-            const warpforge::TensorShape overflowing{
-                std::numeric_limits<std::size_t>::max(), 2U};
+            const warpforge::TensorShape overflowing{std::numeric_limits<std::size_t>::max(), 2U};
             (void)overflowing;
         },
         "shape overflow was not rejected");
@@ -91,7 +93,8 @@ void test_buffer_stream_event_and_tensor() {
     warpforge::DeviceBuffer<float> zero(0U);
     expect(zero.empty() && zero.data() == nullptr, "zero-sized DeviceBuffer must not allocate");
     warpforge::Tensor zero_tensor(warpforge::TensorShape{0U}, warpforge::DType::fp16);
-    expect(zero_tensor.empty() && zero_tensor.native_handle() == nullptr, "zero-sized Tensor must not allocate");
+    expect(zero_tensor.empty() && zero_tensor.native_handle() == nullptr,
+           "zero-sized Tensor must not allocate");
 
     constexpr std::size_t count = 1025U;
     std::vector<float> source(count);
@@ -114,26 +117,32 @@ void test_buffer_stream_event_and_tensor() {
 
     float* native_pointer = original.data();
     warpforge::DeviceBuffer<float> moved(std::move(original));
-    expect(original.data() == nullptr && original.size() == 0U, "moved-from DeviceBuffer not empty");
-    expect(moved.data() == native_pointer && moved.size() == count, "DeviceBuffer move lost ownership");
+    expect(original.data() == nullptr && original.size() == 0U,
+           "moved-from DeviceBuffer not empty");
+    expect(moved.data() == native_pointer && moved.size() == count,
+           "DeviceBuffer move lost ownership");
 
     warpforge::DeviceBuffer<float> assigned;
     assigned = std::move(moved);
-    expect(moved.data() == nullptr && assigned.data() == native_pointer, "DeviceBuffer move assignment failed");
+    expect(moved.data() == nullptr && assigned.data() == native_pointer,
+           "DeviceBuffer move assignment failed");
     float* released = assigned.release();
-    expect(assigned.empty() && assigned.data() == nullptr, "DeviceBuffer release did not clear ownership");
+    expect(assigned.empty() && assigned.data() == nullptr,
+           "DeviceBuffer release did not clear ownership");
     CUDA_CHECK(cudaFree(released));
 
     warpforge::Tensor tensor(warpforge::TensorShape{count}, warpforge::DType::fp32);
-    tensor.copy_from_host_async(source.data(), source.size() * sizeof(float), stream.native_handle());
+    tensor.copy_from_host_async(source.data(), source.size() * sizeof(float),
+                                stream.native_handle());
     std::fill(destination.begin(), destination.end(), 0.0F);
-    tensor.copy_to_host_async(destination.data(), destination.size() * sizeof(float), stream.native_handle());
+    tensor.copy_to_host_async(destination.data(), destination.size() * sizeof(float),
+                              stream.native_handle());
     stream.synchronize();
     expect(destination == source, "Tensor asynchronous round trip failed");
-    expect(tensor.view().data_as<float>() == tensor.native_handle(), "TensorView native pointer mismatch");
-    expect_throw<std::invalid_argument>(
-        [&tensor] { (void)tensor.view().data_as<__half>(); },
-        "TensorView accepted a mismatched typed access");
+    expect(tensor.view().data_as<float>() == tensor.native_handle(),
+           "TensorView native pointer mismatch");
+    expect_throw<std::invalid_argument>([&tensor] { (void)tensor.view().data_as<__half>(); },
+                                        "TensorView accepted a mismatched typed access");
 
     void* tensor_pointer = tensor.native_handle();
     warpforge::Tensor moved_tensor(std::move(tensor));
@@ -154,8 +163,10 @@ void test_workspace_reuse_and_alignment() {
     warpforge::DeviceWorkspace workspace(4096U);
     void* first = workspace.allocate_bytes(33U, 256U);
     void* second = workspace.allocate_bytes(17U, 128U);
-    expect(reinterpret_cast<std::uintptr_t>(first) % 256U == 0U, "workspace 256-byte alignment failed");
-    expect(reinterpret_cast<std::uintptr_t>(second) % 128U == 0U, "workspace 128-byte alignment failed");
+    expect(reinterpret_cast<std::uintptr_t>(first) % 256U == 0U,
+           "workspace 256-byte alignment failed");
+    expect(reinterpret_cast<std::uintptr_t>(second) % 128U == 0U,
+           "workspace 128-byte alignment failed");
     expect(first != second, "workspace allocations overlap");
 
     const std::size_t capacity = workspace.capacity_bytes();
@@ -165,36 +176,34 @@ void test_workspace_reuse_and_alignment() {
     expect(workspace.capacity_bytes() == capacity, "workspace clear changed capacity");
 
     workspace.clear();
-    warpforge::TensorView view = workspace.allocate_view(
-        warpforge::TensorShape{8U, 8U}, warpforge::DType::fp16, 256U);
-    expect(view.byte_size() == 128U && view.dtype() == warpforge::DType::fp16, "workspace TensorView mismatch");
+    warpforge::TensorView view =
+        workspace.allocate_view(warpforge::TensorShape{8U, 8U}, warpforge::DType::fp16, 256U);
+    expect(view.byte_size() == 128U && view.dtype() == warpforge::DType::fp16,
+           "workspace TensorView mismatch");
 
-    expect_throw<std::invalid_argument>(
-        [&workspace] { (void)workspace.allocate_bytes(1U, 3U); },
-        "non-power-of-two workspace alignment was accepted");
-    expect_throw<std::length_error>(
-        [&workspace] { (void)workspace.allocate_bytes(8192U); },
-        "workspace capacity overrun was accepted");
+    expect_throw<std::invalid_argument>([&workspace] { (void)workspace.allocate_bytes(1U, 3U); },
+                                        "non-power-of-two workspace alignment was accepted");
+    expect_throw<std::length_error>([&workspace] { (void)workspace.allocate_bytes(8192U); },
+                                    "workspace capacity overrun was accepted");
 
     workspace.reserve(8192U);
-    expect(workspace.capacity_bytes() == 8192U && workspace.used_bytes() == 0U, "workspace reserve failed");
+    expect(workspace.capacity_bytes() == 8192U && workspace.used_bytes() == 0U,
+           "workspace reserve failed");
     void* workspace_pointer = workspace.native_handle();
     warpforge::DeviceWorkspace moved_workspace(std::move(workspace));
-    expect(
-        workspace.capacity_bytes() == 0U && workspace.used_bytes() == 0U,
-        "moved-from workspace retained state");
+    expect(workspace.capacity_bytes() == 0U && workspace.used_bytes() == 0U,
+           "moved-from workspace retained state");
     expect(moved_workspace.native_handle() == workspace_pointer, "workspace move lost ownership");
     moved_workspace.reset();
-    expect(
-        moved_workspace.capacity_bytes() == 0U && moved_workspace.native_handle() == nullptr,
-        "workspace reset failed");
+    expect(moved_workspace.capacity_bytes() == 0U && moved_workspace.native_handle() == nullptr,
+           "workspace reset failed");
 }
 
 void test_allocation_failure() {
     expect_throw<std::runtime_error>(
         [] {
-            warpforge::DeviceBuffer<std::byte> impossible(
-                std::numeric_limits<std::size_t>::max() / 2U);
+            warpforge::DeviceBuffer<std::byte> impossible(std::numeric_limits<std::size_t>::max() /
+                                                          2U);
             (void)impossible;
         },
         "an impossible CUDA allocation unexpectedly succeeded");
@@ -203,27 +212,19 @@ void test_allocation_failure() {
     (void)cudaGetLastError();
 }
 
-void run_gemm_backend(
-    const warpforge::GemmDispatch dispatch,
-    const cublasHandle_t handle,
-    const warpforge::TensorView& a,
-    const warpforge::TensorView& b,
-    warpforge::TensorView c,
-    const warpforge::GemmProblem& problem,
-    warpforge::CudaStream& stream,
-    const std::vector<float>& expected) {
+void run_gemm_backend(const warpforge::GemmDispatch dispatch, const cublasHandle_t handle,
+                      const warpforge::TensorView& a, const warpforge::TensorView& b,
+                      warpforge::TensorView c, const warpforge::GemmProblem& problem,
+                      warpforge::CudaStream& stream, const std::vector<float>& expected) {
     warpforge::gemm_cuda(a, b, c, problem, dispatch, handle, stream.native_handle());
     std::vector<float> actual(expected.size(), 0.0F);
-    CUDA_CHECK(cudaMemcpyAsync(
-        actual.data(),
-        c.data_as<float>(),
-        actual.size() * sizeof(float),
-        cudaMemcpyDeviceToHost,
-        stream.native_handle()));
+    CUDA_CHECK(cudaMemcpyAsync(actual.data(), c.data_as<float>(), actual.size() * sizeof(float),
+                               cudaMemcpyDeviceToHost, stream.native_handle()));
     stream.synchronize();
     const warpforge::ValidationResult validation = warpforge::validate_fp32(
         expected.data(), actual.data(), actual.size(), warpforge::gemm_fp32_tolerance(problem.k));
-    expect(validation.passed, std::string("TensorView GEMM dispatch failed for ") + warpforge::gemm_backend_name(dispatch.backend));
+    expect(validation.passed, std::string("TensorView GEMM dispatch failed for ") +
+                                  warpforge::gemm_backend_name(dispatch.backend));
 }
 
 void test_gemm_backend_dispatch() {
@@ -247,36 +248,23 @@ void test_gemm_backend_dispatch() {
     b.copy_from_host_async(host_b.data(), host_b.size() * sizeof(float), stream.native_handle());
 
     CublasHandle cublas;
-    run_gemm_backend(
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::tiled_fp32},
-        nullptr,
-        a.view(),
-        b.view(),
-        c.view(),
-        problem,
-        stream,
-        expected);
-    run_gemm_backend(
-        {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32},
-        cublas.get(),
-        a.view(),
-        b.view(),
-        c.view(),
-        problem,
-        stream,
-        expected);
+    run_gemm_backend({warpforge::GemmBackend::custom, warpforge::GemmVariant::tiled_fp32}, nullptr,
+                     a.view(), b.view(), c.view(), problem, stream, expected);
+    run_gemm_backend({warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32},
+                     cublas.get(), a.view(), b.view(), c.view(), problem, stream, expected);
 
     expect_throw<std::invalid_argument>(
         [&] {
-            warpforge::Tensor wrong(warpforge::TensorShape{problem.m, problem.n - 1U}, warpforge::DType::fp32);
+            warpforge::Tensor wrong(warpforge::TensorShape{problem.m, problem.n - 1U},
+                                    warpforge::DType::fp32);
             auto wrong_view = wrong.view();
-            warpforge::gemm_cuda(
-                a.view(), b.view(), wrong_view, problem, {}, nullptr, stream.native_handle());
+            warpforge::gemm_cuda(a.view(), b.view(), wrong_view, problem, {}, nullptr,
+                                 stream.native_handle());
         },
         "GEMM dispatch accepted a mismatched output view");
 }
 
-}  // namespace
+} // namespace
 
 int main(const int argument_count, char** arguments) {
     try {

@@ -9,7 +9,7 @@ namespace warpforge {
 namespace {
 
 class EventPair final {
-public:
+  public:
     EventPair() {
         CUDA_CHECK(cudaEventCreate(&start_));
         try {
@@ -40,17 +40,15 @@ public:
         return stop_;
     }
 
-private:
+  private:
     cudaEvent_t start_{};
     cudaEvent_t stop_{};
 };
 
-}  // namespace
+} // namespace
 
-std::vector<double> measure_cuda_kernel(
-    const BenchmarkConfig& config,
-    cudaStream_t stream,
-    const CudaWork& work) {
+std::vector<double> measure_cuda_kernel(const BenchmarkConfig& config, cudaStream_t stream,
+                                        const CudaWork& work) {
     if (config.measurement_iterations == 0) {
         throw std::invalid_argument("measurement_iterations must be greater than zero");
     }
@@ -80,4 +78,4 @@ std::vector<double> measure_cuda_kernel(
     return samples_ms;
 }
 
-}  // namespace warpforge
+} // namespace warpforge

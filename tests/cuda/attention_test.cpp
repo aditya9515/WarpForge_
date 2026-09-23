@@ -47,10 +47,9 @@ void run_case(const warpforge::AttentionProblem& problem) {
 
     std::vector<float> expected_scores(score_count);
     std::vector<float> expected_context(qkv_count);
-    warpforge::attention_scores_cpu(
-        query.data(), key.data(), expected_scores.data(), problem);
-    warpforge::attention_value_cpu(
-        probabilities.data(), value.data(), expected_context.data(), problem);
+    warpforge::attention_scores_cpu(query.data(), key.data(), expected_scores.data(), problem);
+    warpforge::attention_value_cpu(probabilities.data(), value.data(), expected_context.data(),
+                                   problem);
 
     warpforge::CudaStream stream;
     warpforge::DeviceBuffer<float> device_query(qkv_count);
@@ -62,37 +61,23 @@ void run_case(const warpforge::AttentionProblem& problem) {
     device_query.copy_from_host_async(query.data(), qkv_count, stream.native_handle());
     device_key.copy_from_host_async(key.data(), qkv_count, stream.native_handle());
     device_value.copy_from_host_async(value.data(), qkv_count, stream.native_handle());
-    device_probabilities.copy_from_host_async(
-        probabilities.data(), score_count, stream.native_handle());
-    warpforge::attention_scores_cuda(
-        device_query.data(),
-        device_key.data(),
-        device_scores.data(),
-        problem,
-        256U,
-        stream.native_handle());
-    warpforge::attention_value_cuda(
-        device_probabilities.data(),
-        device_value.data(),
-        device_context.data(),
-        problem,
-        256U,
-        stream.native_handle());
+    device_probabilities.copy_from_host_async(probabilities.data(), score_count,
+                                              stream.native_handle());
+    warpforge::attention_scores_cuda(device_query.data(), device_key.data(), device_scores.data(),
+                                     problem, 256U, stream.native_handle());
+    warpforge::attention_value_cuda(device_probabilities.data(), device_value.data(),
+                                    device_context.data(), problem, 256U, stream.native_handle());
 
     std::vector<float> actual_scores(score_count);
     std::vector<float> actual_context(qkv_count);
-    device_scores.copy_to_host_async(
-        actual_scores.data(), score_count, stream.native_handle());
-    device_context.copy_to_host_async(
-        actual_context.data(), qkv_count, stream.native_handle());
+    device_scores.copy_to_host_async(actual_scores.data(), score_count, stream.native_handle());
+    device_context.copy_to_host_async(actual_context.data(), qkv_count, stream.native_handle());
     stream.synchronize();
 
-    const double score_scale = std::max(
-        1.0,
-        std::ceil(std::log2(static_cast<double>(problem.head_dimension))));
-    const double value_scale = std::max(
-        1.0,
-        std::ceil(std::log2(static_cast<double>(problem.sequence))));
+    const double score_scale =
+        std::max(1.0, std::ceil(std::log2(static_cast<double>(problem.head_dimension))));
+    const double value_scale =
+        std::max(1.0, std::ceil(std::log2(static_cast<double>(problem.sequence))));
     const auto score_validation = warpforge::validate_fp32(
         expected_scores.data(), actual_scores.data(), score_count, {1.0e-5 * score_scale, 1.0e-5});
     const auto value_validation = warpforge::validate_fp32(
@@ -122,7 +107,7 @@ void test_invalid_arguments() {
     expect(threw, "zero attention block size was accepted");
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {

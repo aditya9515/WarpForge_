@@ -37,37 +37,28 @@ struct CaseDefinition final {
 
 constexpr std::array cases{
     CaseDefinition{
-        "cublas_fp32",
-        false,
-        {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32}},
-    CaseDefinition{
-        "custom_naive_fp32",
-        false,
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::naive_fp32}},
-    CaseDefinition{
-        "custom_tiled_fp32",
-        false,
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::tiled_fp32}},
-    CaseDefinition{
-        "custom_coalesced_fp32",
-        false,
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::coalesced_fp32}},
-    CaseDefinition{
-        "custom_register_blocked_fp32",
-        false,
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::register_blocked_fp32}},
-    CaseDefinition{
-        "cublas_fp16_fp32",
-        true,
-        {warpforge::GemmBackend::cublas, warpforge::GemmVariant::tiled_fp16_fp32}},
-    CaseDefinition{
-        "custom_tiled_fp16_fp32",
-        true,
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::tiled_fp16_fp32}},
-    CaseDefinition{
-        "custom_wmma_fp16_fp32",
-        true,
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::wmma_fp16_fp32}},
+        "cublas_fp32", false, {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32}},
+    CaseDefinition{"custom_naive_fp32",
+                   false,
+                   {warpforge::GemmBackend::custom, warpforge::GemmVariant::naive_fp32}},
+    CaseDefinition{"custom_tiled_fp32",
+                   false,
+                   {warpforge::GemmBackend::custom, warpforge::GemmVariant::tiled_fp32}},
+    CaseDefinition{"custom_coalesced_fp32",
+                   false,
+                   {warpforge::GemmBackend::custom, warpforge::GemmVariant::coalesced_fp32}},
+    CaseDefinition{"custom_register_blocked_fp32",
+                   false,
+                   {warpforge::GemmBackend::custom, warpforge::GemmVariant::register_blocked_fp32}},
+    CaseDefinition{"cublas_fp16_fp32",
+                   true,
+                   {warpforge::GemmBackend::cublas, warpforge::GemmVariant::tiled_fp16_fp32}},
+    CaseDefinition{"custom_tiled_fp16_fp32",
+                   true,
+                   {warpforge::GemmBackend::custom, warpforge::GemmVariant::tiled_fp16_fp32}},
+    CaseDefinition{"custom_wmma_fp16_fp32",
+                   true,
+                   {warpforge::GemmBackend::custom, warpforge::GemmVariant::wmma_fp16_fp32}},
 };
 
 struct Options final {
@@ -85,12 +76,11 @@ struct RecordedResult final {
     warpforge::BenchmarkResult result;
 };
 
-template <typename T>
-using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
+template <typename T> using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
 using LocalStream = warpforge::CudaStream;
 
 class LocalCublasHandle final {
-public:
+  public:
     LocalCublasHandle() {
         if (cublasCreate(&handle_) != CUBLAS_STATUS_SUCCESS) {
             throw std::runtime_error("cublasCreate failed");
@@ -113,7 +103,7 @@ public:
         return handle_;
     }
 
-private:
+  private:
     cublasHandle_t handle_{};
 };
 
@@ -205,10 +195,9 @@ void print_usage() {
 }
 
 const CaseDefinition& find_case(const std::string& name) {
-    const auto iterator = std::find_if(
-        cases.begin(), cases.end(), [&name](const CaseDefinition& candidate) {
-            return name == candidate.name;
-        });
+    const auto iterator =
+        std::find_if(cases.begin(), cases.end(),
+                     [&name](const CaseDefinition& candidate) { return name == candidate.name; });
     if (iterator == cases.end()) {
         throw std::invalid_argument("unknown GEMM implementation: " + name);
     }
@@ -216,10 +205,8 @@ const CaseDefinition& find_case(const std::string& name) {
 }
 
 void validate_options(const Options& options) {
-    if (options.sizes.empty() ||
-        std::any_of(options.sizes.begin(), options.sizes.end(), [](const std::size_t size) {
-            return size == 0U;
-        })) {
+    if (options.sizes.empty() || std::any_of(options.sizes.begin(), options.sizes.end(),
+                                             [](const std::size_t size) { return size == 0U; })) {
         throw std::invalid_argument("GEMM sizes must be greater than zero");
     }
     if (options.benchmark.measurement_iterations == 0U) {
@@ -229,13 +216,11 @@ void validate_options(const Options& options) {
         static_cast<void>(find_case(options.implementation));
     }
     if (!options.profile_only && options.implementation != "all") {
-        throw std::invalid_argument(
-            "--implementation selects one kernel only with --profile-only; report runs require all matched baselines");
+        throw std::invalid_argument("--implementation selects one kernel only with --profile-only; "
+                                    "report runs require all matched baselines");
     }
-    if (options.profile_only &&
-        (options.implementation == "all" || options.sizes.size() != 1U)) {
-        throw std::invalid_argument(
-            "--profile-only requires one --size and one --implementation");
+    if (options.profile_only && (options.implementation == "all" || options.sizes.size() != 1U)) {
+        throw std::invalid_argument("--profile-only requires one --size and one --implementation");
     }
     for (const std::size_t size : options.sizes) {
         if (size > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
@@ -248,51 +233,40 @@ void validate_options(const Options& options) {
     }
 }
 
-warpforge::LaunchConfiguration launch_configuration(
-    const warpforge::GemmProblem& problem,
-    const CaseDefinition& definition) {
+warpforge::LaunchConfiguration launch_configuration(const warpforge::GemmProblem& problem,
+                                                    const CaseDefinition& definition) {
     if (definition.dispatch.backend == warpforge::GemmBackend::cublas) {
         return {};
     }
     switch (definition.dispatch.variant) {
-        case warpforge::GemmVariant::naive_fp32:
-        case warpforge::GemmVariant::tiled_fp32:
-        case warpforge::GemmVariant::tiled_fp16_fp32:
-            return {
-                {static_cast<unsigned int>((problem.n + 15U) / 16U),
-                 static_cast<unsigned int>((problem.m + 15U) / 16U),
-                 1U},
+    case warpforge::GemmVariant::naive_fp32:
+    case warpforge::GemmVariant::tiled_fp32:
+    case warpforge::GemmVariant::tiled_fp16_fp32:
+        return {{static_cast<unsigned int>((problem.n + 15U) / 16U),
+                 static_cast<unsigned int>((problem.m + 15U) / 16U), 1U},
                 {16U, 16U, 1U},
                 0U};
-        case warpforge::GemmVariant::coalesced_fp32:
-            return {
-                {static_cast<unsigned int>((problem.n + 31U) / 32U),
-                 static_cast<unsigned int>((problem.m + 31U) / 32U),
-                 1U},
+    case warpforge::GemmVariant::coalesced_fp32:
+        return {{static_cast<unsigned int>((problem.n + 31U) / 32U),
+                 static_cast<unsigned int>((problem.m + 31U) / 32U), 1U},
                 {32U, 8U, 1U},
                 0U};
-        case warpforge::GemmVariant::register_blocked_fp32:
-            return {
-                {static_cast<unsigned int>((problem.n + 63U) / 64U),
-                 static_cast<unsigned int>((problem.m + 63U) / 64U),
-                 1U},
+    case warpforge::GemmVariant::register_blocked_fp32:
+        return {{static_cast<unsigned int>((problem.n + 63U) / 64U),
+                 static_cast<unsigned int>((problem.m + 63U) / 64U), 1U},
                 {16U, 16U, 1U},
                 0U};
-        case warpforge::GemmVariant::wmma_fp16_fp32:
-            return {
-                {static_cast<unsigned int>(problem.n / 16U),
-                 static_cast<unsigned int>(problem.m / 16U),
-                 1U},
+    case warpforge::GemmVariant::wmma_fp16_fp32:
+        return {{static_cast<unsigned int>(problem.n / 16U),
+                 static_cast<unsigned int>(problem.m / 16U), 1U},
                 {32U, 1U, 1U},
                 0U};
     }
     return {};
 }
 
-warpforge::ValidationResult trusted_baseline_validation(
-    const std::vector<float>& baseline) {
-    return warpforge::validate_fp32(
-        baseline.data(), baseline.data(), baseline.size(), {0.0, 0.0});
+warpforge::ValidationResult trusted_baseline_validation(const std::vector<float>& baseline) {
+    return warpforge::validate_fp32(baseline.data(), baseline.data(), baseline.size(), {0.0, 0.0});
 }
 
 double static_shared_memory_bytes(const CaseDefinition& definition) {
@@ -300,31 +274,25 @@ double static_shared_memory_bytes(const CaseDefinition& definition) {
         return 0.0;
     }
     switch (definition.dispatch.variant) {
-        case warpforge::GemmVariant::tiled_fp32:
-        case warpforge::GemmVariant::tiled_fp16_fp32:
-            return static_cast<double>(2U * 16U * 16U * sizeof(float));
-        case warpforge::GemmVariant::coalesced_fp32:
-            return static_cast<double>(2U * 32U * 33U * sizeof(float));
-        case warpforge::GemmVariant::register_blocked_fp32:
-            return static_cast<double>((64U * 17U + 16U * 65U) * sizeof(float));
-        default:
-            return 0.0;
+    case warpforge::GemmVariant::tiled_fp32:
+    case warpforge::GemmVariant::tiled_fp16_fp32:
+        return static_cast<double>(2U * 16U * 16U * sizeof(float));
+    case warpforge::GemmVariant::coalesced_fp32:
+        return static_cast<double>(2U * 32U * 33U * sizeof(float));
+    case warpforge::GemmVariant::register_blocked_fp32:
+        return static_cast<double>((64U * 17U + 16U * 65U) * sizeof(float));
+    default:
+        return 0.0;
     }
 }
 
-RecordedResult benchmark_case(
-    const CaseDefinition& definition,
-    const warpforge::GemmProblem& problem,
-    const Options& options,
-    LocalDeviceBuffer<float>& device_a_fp32,
-    LocalDeviceBuffer<float>& device_b_fp32,
-    LocalDeviceBuffer<__half>& device_a_fp16,
-    LocalDeviceBuffer<__half>& device_b_fp16,
-    LocalDeviceBuffer<float>& device_c,
-    const std::vector<float>& reference,
-    const std::vector<float>* cpu_reference,
-    const cublasHandle_t handle,
-    const cudaStream_t stream) {
+RecordedResult
+benchmark_case(const CaseDefinition& definition, const warpforge::GemmProblem& problem,
+               const Options& options, LocalDeviceBuffer<float>& device_a_fp32,
+               LocalDeviceBuffer<float>& device_b_fp32, LocalDeviceBuffer<__half>& device_a_fp16,
+               LocalDeviceBuffer<__half>& device_b_fp16, LocalDeviceBuffer<float>& device_c,
+               const std::vector<float>& reference, const std::vector<float>* cpu_reference,
+               const cublasHandle_t handle, const cudaStream_t stream) {
     const warpforge::TensorView a_fp32{
         device_a_fp32.get(), {problem.m, problem.k}, warpforge::DType::fp32};
     const warpforge::TensorView b_fp32{
@@ -333,66 +301,47 @@ RecordedResult benchmark_case(
         device_a_fp16.get(), {problem.m, problem.k}, warpforge::DType::fp16};
     const warpforge::TensorView b_fp16{
         device_b_fp16.get(), {problem.k, problem.n}, warpforge::DType::fp16};
-    warpforge::TensorView output{
-        device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
+    warpforge::TensorView output{device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
     auto launch = [&](const cudaStream_t launch_stream) {
         if (definition.fp16_input) {
-            warpforge::gemm_cuda(
-                a_fp16,
-                b_fp16,
-                output,
-                problem,
-                definition.dispatch,
-                handle,
-                launch_stream);
+            warpforge::gemm_cuda(a_fp16, b_fp16, output, problem, definition.dispatch, handle,
+                                 launch_stream);
         } else {
-            warpforge::gemm_cuda(
-                a_fp32,
-                b_fp32,
-                output,
-                problem,
-                definition.dispatch,
-                handle,
-                launch_stream);
+            warpforge::gemm_cuda(a_fp32, b_fp32, output, problem, definition.dispatch, handle,
+                                 launch_stream);
         }
     };
 
     launch(stream);
     CUDA_CHECK(cudaStreamSynchronize(stream));
     std::vector<float> actual(warpforge::gemm_c_elements(problem));
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(),
-        device_c.get(),
-        actual.size() * sizeof(float),
-        cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_c.get(), actual.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
 
     const warpforge::Tolerance tolerance = definition.fp16_input
-        ? warpforge::gemm_fp16_tolerance(problem.k)
-        : warpforge::gemm_fp32_tolerance(problem.k);
+                                               ? warpforge::gemm_fp16_tolerance(problem.k)
+                                               : warpforge::gemm_fp32_tolerance(problem.k);
     warpforge::ValidationResult validation;
     if (definition.dispatch.backend == warpforge::GemmBackend::cublas) {
         validation = cpu_reference == nullptr
-            ? trusted_baseline_validation(actual)
-            : warpforge::validate_fp32(
-                  cpu_reference->data(), actual.data(), actual.size(), tolerance);
+                         ? trusted_baseline_validation(actual)
+                         : warpforge::validate_fp32(cpu_reference->data(), actual.data(),
+                                                    actual.size(), tolerance);
     } else {
-        validation = warpforge::validate_fp32(
-            reference.data(), actual.data(), actual.size(), tolerance);
+        validation =
+            warpforge::validate_fp32(reference.data(), actual.data(), actual.size(), tolerance);
     }
     if (!validation.passed) {
-        throw std::runtime_error(
-            std::string(definition.name) + " failed validation for size " +
-            std::to_string(problem.m) + " at index " +
-            std::to_string(validation.worst_index));
+        throw std::runtime_error(std::string(definition.name) + " failed validation for size " +
+                                 std::to_string(problem.m) + " at index " +
+                                 std::to_string(validation.worst_index));
     }
 
     auto samples = warpforge::measure_cuda_kernel(options.benchmark, stream, launch);
     const auto statistics = warpforge::summarize_samples(samples);
-    const double gflops = warpforge::gemm_flop_count(problem) /
-                          (statistics.median_ms * 1.0e6);
+    const double gflops = warpforge::gemm_flop_count(problem) / (statistics.median_ms * 1.0e6);
     auto metadata = warpforge::make_benchmark_metadata(
-        definition.fp16_input ? "gemm_fp16_fp32" : "gemm_fp32",
-        definition.name,
+        definition.fp16_input ? "gemm_fp16_fp32" : "gemm_fp32", definition.name,
         definition.fp16_input ? "fp16_input_fp32_accumulation" : "fp32",
         {{"m", problem.m}, {"n", problem.n}, {"k", problem.k}},
         launch_configuration(problem, definition));
@@ -419,10 +368,9 @@ RecordedResult benchmark_case(
 void add_library_relative_metrics(std::vector<RecordedResult>& records) {
     for (auto& record : records) {
         const std::uint64_t size = record.result.metadata.dimensions.at("m");
-        const std::string baseline_name =
-            record.fp16_input ? "cublas_fp16_fp32" : "cublas_fp32";
-        const auto baseline = std::find_if(
-            records.begin(), records.end(), [&](const RecordedResult& candidate) {
+        const std::string baseline_name = record.fp16_input ? "cublas_fp16_fp32" : "cublas_fp32";
+        const auto baseline =
+            std::find_if(records.begin(), records.end(), [&](const RecordedResult& candidate) {
                 return candidate.result.metadata.dimensions.at("m") == size &&
                        candidate.result.metadata.implementation == baseline_name;
             });
@@ -436,9 +384,8 @@ void add_library_relative_metrics(std::vector<RecordedResult>& records) {
     }
 }
 
-void write_results(
-    const std::filesystem::path& directory,
-    const std::vector<RecordedResult>& records) {
+void write_results(const std::filesystem::path& directory,
+                   const std::vector<RecordedResult>& records) {
     std::filesystem::create_directories(directory);
     for (const auto& record : records) {
         warpforge::write_benchmark_json(record.result, directory / record.filename);
@@ -454,15 +401,11 @@ void write_results(
         const auto& result = record.result;
         summary << result.schema_version << ','
                 << record.filename.substr(0U, record.filename.size() - 5U) << ','
-                << result.metadata.dimensions.at("m") << ','
-                << result.metadata.dimensions.at("n") << ','
-                << result.metadata.dimensions.at("k") << ','
-                << result.metadata.data_type << ','
-                << result.metadata.implementation << ','
-                << result.statistics.median_ms << ','
-                << result.statistics.p95_ms << ','
-                << result.metrics.at("gflops_from_median") << ','
-                << result.metrics.at("percent_of_cublas") << ','
+                << result.metadata.dimensions.at("m") << ',' << result.metadata.dimensions.at("n")
+                << ',' << result.metadata.dimensions.at("k") << ',' << result.metadata.data_type
+                << ',' << result.metadata.implementation << ',' << result.statistics.median_ms
+                << ',' << result.statistics.p95_ms << ',' << result.metrics.at("gflops_from_median")
+                << ',' << result.metrics.at("percent_of_cublas") << ','
                 << result.validation.max_absolute_error << ','
                 << (result.validation.passed ? "true" : "false") << ','
                 << result.metadata.git_commit << '\n';
@@ -476,22 +419,19 @@ void check_memory_capacity(const warpforge::GemmProblem& problem) {
     const std::size_t square = warpforge::gemm_c_elements(problem);
     const std::size_t required = square * (5U * sizeof(float) + 2U * sizeof(__half));
     if (required > free_bytes || free_bytes - required < 64U * 1024U * 1024U) {
-        throw std::runtime_error(
-            "GEMM size " + std::to_string(problem.m) +
-            " does not leave the required 64 MiB device-memory reserve");
+        throw std::runtime_error("GEMM size " + std::to_string(problem.m) +
+                                 " does not leave the required 64 MiB device-memory reserve");
     }
 }
 
-std::vector<float> cpu_reference_for(
-    const std::vector<float>& a,
-    const std::vector<float>& b,
-    const warpforge::GemmProblem& problem) {
+std::vector<float> cpu_reference_for(const std::vector<float>& a, const std::vector<float>& b,
+                                     const warpforge::GemmProblem& problem) {
     std::vector<float> output(warpforge::gemm_c_elements(problem));
     warpforge::gemm_cpu_fp32(a.data(), b.data(), output.data(), problem);
     return output;
 }
 
-}  // namespace
+} // namespace
 
 int main(int argument_count, char** arguments) {
     try {
@@ -532,30 +472,18 @@ int main(int argument_count, char** arguments) {
             LocalDeviceBuffer<__half> device_a_fp16(matrix_elements);
             LocalDeviceBuffer<__half> device_b_fp16(matrix_elements);
             LocalDeviceBuffer<float> device_c(matrix_elements);
-            CUDA_CHECK(cudaMemcpyAsync(
-                device_a_fp32.get(),
-                host_a.data(),
-                matrix_elements * sizeof(float),
-                cudaMemcpyHostToDevice,
-                stream.get()));
-            CUDA_CHECK(cudaMemcpyAsync(
-                device_b_fp32.get(),
-                host_b.data(),
-                matrix_elements * sizeof(float),
-                cudaMemcpyHostToDevice,
-                stream.get()));
-            CUDA_CHECK(cudaMemcpyAsync(
-                device_a_fp16.get(),
-                host_a_fp16.data(),
-                matrix_elements * sizeof(__half),
-                cudaMemcpyHostToDevice,
-                stream.get()));
-            CUDA_CHECK(cudaMemcpyAsync(
-                device_b_fp16.get(),
-                host_b_fp16.data(),
-                matrix_elements * sizeof(__half),
-                cudaMemcpyHostToDevice,
-                stream.get()));
+            CUDA_CHECK(cudaMemcpyAsync(device_a_fp32.get(), host_a.data(),
+                                       matrix_elements * sizeof(float), cudaMemcpyHostToDevice,
+                                       stream.get()));
+            CUDA_CHECK(cudaMemcpyAsync(device_b_fp32.get(), host_b.data(),
+                                       matrix_elements * sizeof(float), cudaMemcpyHostToDevice,
+                                       stream.get()));
+            CUDA_CHECK(cudaMemcpyAsync(device_a_fp16.get(), host_a_fp16.data(),
+                                       matrix_elements * sizeof(__half), cudaMemcpyHostToDevice,
+                                       stream.get()));
+            CUDA_CHECK(cudaMemcpyAsync(device_b_fp16.get(), host_b_fp16.data(),
+                                       matrix_elements * sizeof(__half), cudaMemcpyHostToDevice,
+                                       stream.get()));
             CUDA_CHECK(cudaStreamSynchronize(stream.get()));
 
             std::vector<float> fp32_reference(matrix_elements);
@@ -571,33 +499,19 @@ int main(int argument_count, char** arguments) {
             warpforge::TensorView output{
                 device_c.get(), {problem.m, problem.n}, warpforge::DType::fp32};
             warpforge::gemm_cuda(
-                a_fp32,
-                b_fp32,
-                output,
-                problem,
-                {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32},
-                handle.get(),
+                a_fp32, b_fp32, output, problem,
+                {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32}, handle.get(),
                 stream.get());
             CUDA_CHECK(cudaStreamSynchronize(stream.get()));
-            CUDA_CHECK(cudaMemcpy(
-                fp32_reference.data(),
-                device_c.get(),
-                matrix_elements * sizeof(float),
-                cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(fp32_reference.data(), device_c.get(),
+                                  matrix_elements * sizeof(float), cudaMemcpyDeviceToHost));
             warpforge::gemm_cuda(
-                a_fp16,
-                b_fp16,
-                output,
-                problem,
+                a_fp16, b_fp16, output, problem,
                 {warpforge::GemmBackend::cublas, warpforge::GemmVariant::tiled_fp16_fp32},
-                handle.get(),
-                stream.get());
+                handle.get(), stream.get());
             CUDA_CHECK(cudaStreamSynchronize(stream.get()));
-            CUDA_CHECK(cudaMemcpy(
-                fp16_reference.data(),
-                device_c.get(),
-                matrix_elements * sizeof(float),
-                cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(fp16_reference.data(), device_c.get(),
+                                  matrix_elements * sizeof(float), cudaMemcpyDeviceToHost));
 
             std::vector<float> cpu_fp32;
             std::vector<float> cpu_fp16;
@@ -610,35 +524,24 @@ int main(int argument_count, char** arguments) {
                 const std::vector<float>& reference =
                     definition.fp16_input ? fp16_reference : fp32_reference;
                 const std::vector<float>* cpu_reference = nullptr;
-                if (definition.dispatch.backend == warpforge::GemmBackend::cublas &&
-                    size <= 256U) {
+                if (definition.dispatch.backend == warpforge::GemmBackend::cublas && size <= 256U) {
                     cpu_reference = definition.fp16_input ? &cpu_fp16 : &cpu_fp32;
                 }
-                return benchmark_case(
-                    definition,
-                    problem,
-                    options,
-                    device_a_fp32,
-                    device_b_fp32,
-                    device_a_fp16,
-                    device_b_fp16,
-                    device_c,
-                    reference,
-                    cpu_reference,
-                    handle.get(),
-                    stream.get());
+                return benchmark_case(definition, problem, options, device_a_fp32, device_b_fp32,
+                                      device_a_fp16, device_b_fp16, device_c, reference,
+                                      cpu_reference, handle.get(), stream.get());
             };
 
             if (options.profile_only) {
                 const auto result = run_definition(find_case(options.implementation));
-                std::cout << "Profile GEMM validation: PASS (" << result.result.metadata.implementation
-                          << ", " << size << "x" << size << "x" << size << ")\n";
+                std::cout << "Profile GEMM validation: PASS ("
+                          << result.result.metadata.implementation << ", " << size << "x" << size
+                          << "x" << size << ")\n";
                 return EXIT_SUCCESS;
             }
 
             for (const auto& definition : cases) {
-                if (options.implementation == "all" ||
-                    options.implementation == definition.name) {
+                if (options.implementation == "all" || options.implementation == definition.name) {
                     records.push_back(run_definition(definition));
                     const auto& result = records.back().result;
                     std::cout << result.metadata.implementation << " " << size << ": median "

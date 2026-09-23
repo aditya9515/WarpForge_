@@ -9,8 +9,7 @@
 namespace warpforge {
 namespace {
 
-[[nodiscard]] std::size_t checked_element_count(
-    const std::vector<std::size_t>& dimensions) {
+[[nodiscard]] std::size_t checked_element_count(const std::vector<std::size_t>& dimensions) {
     if (dimensions.empty()) {
         return 0;
     }
@@ -40,24 +39,24 @@ void require_event(const cudaEvent_t event) {
     }
 }
 
-}  // namespace
+} // namespace
 
 const char* dtype_name(const DType dtype) noexcept {
     switch (dtype) {
-        case DType::fp32:
-            return "fp32";
-        case DType::fp16:
-            return "fp16";
+    case DType::fp32:
+        return "fp32";
+    case DType::fp16:
+        return "fp16";
     }
     return "unknown";
 }
 
 std::size_t dtype_size(const DType dtype) {
     switch (dtype) {
-        case DType::fp32:
-            return sizeof(float);
-        case DType::fp16:
-            return sizeof(__half);
+    case DType::fp32:
+        return sizeof(float);
+    case DType::fp16:
+        return sizeof(__half);
     }
     throw std::invalid_argument("unsupported WarpForge dtype");
 }
@@ -67,8 +66,7 @@ TensorShape::TensorShape(const std::initializer_list<std::size_t> dimensions)
     update_element_count();
 }
 
-TensorShape::TensorShape(std::vector<std::size_t> dimensions)
-    : dimensions_(std::move(dimensions)) {
+TensorShape::TensorShape(std::vector<std::size_t> dimensions) : dimensions_(std::move(dimensions)) {
     update_element_count();
 }
 
@@ -145,8 +143,7 @@ CudaEvent::~CudaEvent() noexcept {
     reset_noexcept();
 }
 
-CudaEvent::CudaEvent(CudaEvent&& other) noexcept
-    : event_(std::exchange(other.event_, nullptr)) {}
+CudaEvent::CudaEvent(CudaEvent&& other) noexcept : event_(std::exchange(other.event_, nullptr)) {}
 
 CudaEvent& CudaEvent::operator=(CudaEvent&& other) noexcept {
     if (this != &other) {
@@ -205,9 +202,7 @@ Tensor::Tensor(TensorShape shape, const DType dtype) {
 }
 
 Tensor::Tensor(Tensor&& other) noexcept
-    : storage_(std::move(other.storage_)),
-      shape_(std::move(other.shape_)),
-      dtype_(other.dtype_) {
+    : storage_(std::move(other.storage_)), shape_(std::move(other.shape_)), dtype_(other.dtype_) {
     other.shape_ = TensorShape{};
     other.dtype_ = DType::fp32;
 }
@@ -238,10 +233,8 @@ void Tensor::reset() {
     dtype_ = DType::fp32;
 }
 
-void Tensor::copy_from_host_async(
-    const void* source,
-    const std::size_t bytes,
-    const cudaStream_t stream) {
+void Tensor::copy_from_host_async(const void* source, const std::size_t bytes,
+                                  const cudaStream_t stream) {
     if (bytes > byte_size()) {
         throw std::out_of_range("host-to-tensor copy exceeds tensor storage");
     }
@@ -251,14 +244,11 @@ void Tensor::copy_from_host_async(
     if (source == nullptr) {
         throw std::invalid_argument("host source is null for a non-empty tensor copy");
     }
-    CUDA_CHECK(cudaMemcpyAsync(
-        storage_.data(), source, bytes, cudaMemcpyHostToDevice, stream));
+    CUDA_CHECK(cudaMemcpyAsync(storage_.data(), source, bytes, cudaMemcpyHostToDevice, stream));
 }
 
-void Tensor::copy_to_host_async(
-    void* destination,
-    const std::size_t bytes,
-    const cudaStream_t stream) const {
+void Tensor::copy_to_host_async(void* destination, const std::size_t bytes,
+                                const cudaStream_t stream) const {
     if (bytes > byte_size()) {
         throw std::out_of_range("tensor-to-host copy exceeds tensor storage");
     }
@@ -268,16 +258,14 @@ void Tensor::copy_to_host_async(
     if (destination == nullptr) {
         throw std::invalid_argument("host destination is null for a non-empty tensor copy");
     }
-    CUDA_CHECK(cudaMemcpyAsync(
-        destination, storage_.data(), bytes, cudaMemcpyDeviceToHost, stream));
+    CUDA_CHECK(
+        cudaMemcpyAsync(destination, storage_.data(), bytes, cudaMemcpyDeviceToHost, stream));
 }
 
-DeviceWorkspace::DeviceWorkspace(const std::size_t capacity_bytes)
-    : storage_(capacity_bytes) {}
+DeviceWorkspace::DeviceWorkspace(const std::size_t capacity_bytes) : storage_(capacity_bytes) {}
 
 DeviceWorkspace::DeviceWorkspace(DeviceWorkspace&& other) noexcept
-    : storage_(std::move(other.storage_)),
-      used_bytes_(std::exchange(other.used_bytes_, 0U)) {}
+    : storage_(std::move(other.storage_)), used_bytes_(std::exchange(other.used_bytes_, 0U)) {}
 
 DeviceWorkspace& DeviceWorkspace::operator=(DeviceWorkspace&& other) noexcept {
     if (this != &other) {
@@ -302,9 +290,7 @@ void DeviceWorkspace::reset() {
     used_bytes_ = 0;
 }
 
-void* DeviceWorkspace::allocate_bytes(
-    const std::size_t bytes,
-    const std::size_t alignment) {
+void* DeviceWorkspace::allocate_bytes(const std::size_t bytes, const std::size_t alignment) {
     if (bytes == 0) {
         return nullptr;
     }
@@ -325,11 +311,9 @@ void* DeviceWorkspace::allocate_bytes(
     return pointer;
 }
 
-TensorView DeviceWorkspace::allocate_view(
-    const TensorShape& shape,
-    const DType dtype,
-    const std::size_t alignment) {
+TensorView DeviceWorkspace::allocate_view(const TensorShape& shape, const DType dtype,
+                                          const std::size_t alignment) {
     return TensorView(allocate_bytes(shape.byte_size(dtype), alignment), shape, dtype);
 }
 
-}  // namespace warpforge
+} // namespace warpforge

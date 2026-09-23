@@ -17,9 +17,8 @@
 
 namespace {
 
-template <typename T>
-class TestDeviceBuffer final {
-public:
+template <typename T> class TestDeviceBuffer final {
+  public:
     explicit TestDeviceBuffer(const std::size_t count) {
         if (count > 0U) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
@@ -39,12 +38,12 @@ public:
         return pointer_;
     }
 
-private:
+  private:
     T* pointer_{};
 };
 
 class TestCublasHandle final {
-public:
+  public:
     TestCublasHandle() {
         if (cublasCreate(&handle_) != CUBLAS_STATUS_SUCCESS) {
             throw std::runtime_error("cublasCreate failed");
@@ -67,32 +66,27 @@ public:
         return handle_;
     }
 
-private:
+  private:
     cublasHandle_t handle_{};
 };
 
-void require_valid(
-    const std::vector<float>& expected,
-    const std::vector<float>& actual,
-    const warpforge::Tolerance tolerance,
-    const std::string& label) {
-    const auto result = warpforge::validate_fp32(
-        expected.data(), actual.data(), expected.size(), tolerance);
+void require_valid(const std::vector<float>& expected, const std::vector<float>& actual,
+                   const warpforge::Tolerance tolerance, const std::string& label) {
+    const auto result =
+        warpforge::validate_fp32(expected.data(), actual.data(), expected.size(), tolerance);
     if (!result.passed) {
-        throw std::runtime_error(
-            label + " failed at output " + std::to_string(result.worst_index) +
-            " with max abs error " + std::to_string(result.max_absolute_error));
+        throw std::runtime_error(label + " failed at output " + std::to_string(result.worst_index) +
+                                 " with max abs error " +
+                                 std::to_string(result.max_absolute_error));
     }
 }
 
-void make_inputs(
-    const warpforge::GemmProblem& problem,
-    std::vector<float>& a,
-    std::vector<float>& b) {
+void make_inputs(const warpforge::GemmProblem& problem, std::vector<float>& a,
+                 std::vector<float>& b) {
     a.resize(warpforge::gemm_a_elements(problem));
     b.resize(warpforge::gemm_b_elements(problem));
-    std::mt19937 generator(
-        2027U + static_cast<unsigned int>(problem.m + 3U * problem.n + 7U * problem.k));
+    std::mt19937 generator(2027U +
+                           static_cast<unsigned int>(problem.m + 3U * problem.n + 7U * problem.k));
     std::uniform_real_distribution<float> distribution(-1.0F, 1.0F);
     for (float& value : a) {
         value = distribution(generator);
@@ -102,9 +96,7 @@ void make_inputs(
     }
 }
 
-void test_fp32_problem(
-    const warpforge::GemmProblem& problem,
-    const cublasHandle_t handle) {
+void test_fp32_problem(const warpforge::GemmProblem& problem, const cublasHandle_t handle) {
     std::vector<float> a;
     std::vector<float> b;
     make_inputs(problem, a, b);
@@ -115,10 +107,10 @@ void test_fp32_problem(
     TestDeviceBuffer<float> device_a(a.size());
     TestDeviceBuffer<float> device_b(b.size());
     TestDeviceBuffer<float> device_c(actual.size());
-    CUDA_CHECK(cudaMemcpy(
-        device_a.get(), a.data(), a.size() * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(
-        device_b.get(), b.data(), b.size() * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_a.get(), a.data(), a.size() * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_b.get(), b.data(), b.size() * sizeof(float), cudaMemcpyHostToDevice));
 
     constexpr std::array variants{
         warpforge::GemmVariant::naive_fp32,
@@ -127,49 +119,26 @@ void test_fp32_problem(
         warpforge::GemmVariant::register_blocked_fp32,
     };
     for (const auto variant : variants) {
-        warpforge::gemm_fp32_cuda(
-            device_a.get(),
-            device_b.get(),
-            device_c.get(),
-            problem,
-            {warpforge::GemmBackend::custom, variant});
+        warpforge::gemm_fp32_cuda(device_a.get(), device_b.get(), device_c.get(), problem,
+                                  {warpforge::GemmBackend::custom, variant});
         CUDA_CHECK(cudaDeviceSynchronize());
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(),
-            device_c.get(),
-            actual.size() * sizeof(float),
-            cudaMemcpyDeviceToHost));
-        require_valid(
-            expected,
-            actual,
-            warpforge::gemm_fp32_tolerance(problem.k),
-            warpforge::gemm_variant_name(variant));
+        CUDA_CHECK(cudaMemcpy(actual.data(), device_c.get(), actual.size() * sizeof(float),
+                              cudaMemcpyDeviceToHost));
+        require_valid(expected, actual, warpforge::gemm_fp32_tolerance(problem.k),
+                      warpforge::gemm_variant_name(variant));
     }
 
-    warpforge::gemm_fp32_cuda(
-        device_a.get(),
-        device_b.get(),
-        device_c.get(),
-        problem,
-        {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32},
-        handle);
+    warpforge::gemm_fp32_cuda(device_a.get(), device_b.get(), device_c.get(), problem,
+                              {warpforge::GemmBackend::cublas, warpforge::GemmVariant::naive_fp32},
+                              handle);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(),
-        device_c.get(),
-        actual.size() * sizeof(float),
-        cudaMemcpyDeviceToHost));
-    require_valid(
-        expected,
-        actual,
-        warpforge::gemm_fp32_tolerance(problem.k),
-        "cuBLAS FP32");
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_c.get(), actual.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    require_valid(expected, actual, warpforge::gemm_fp32_tolerance(problem.k), "cuBLAS FP32");
 }
 
-void test_fp16_problem(
-    const warpforge::GemmProblem& problem,
-    const cublasHandle_t handle,
-    const bool include_wmma) {
+void test_fp16_problem(const warpforge::GemmProblem& problem, const cublasHandle_t handle,
+                       const bool include_wmma) {
     std::vector<float> source_a;
     std::vector<float> source_b;
     make_inputs(problem, source_a, source_b);
@@ -187,78 +156,48 @@ void test_fp16_problem(
     }
     std::vector<float> expected(warpforge::gemm_c_elements(problem));
     std::vector<float> actual(expected.size());
-    warpforge::gemm_cpu_fp32(
-        quantized_a.data(), quantized_b.data(), expected.data(), problem);
+    warpforge::gemm_cpu_fp32(quantized_a.data(), quantized_b.data(), expected.data(), problem);
 
     TestDeviceBuffer<__half> device_a(a.size());
     TestDeviceBuffer<__half> device_b(b.size());
     TestDeviceBuffer<float> device_c(actual.size());
-    CUDA_CHECK(cudaMemcpy(
-        device_a.get(), a.data(), a.size() * sizeof(__half), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(
-        device_b.get(), b.data(), b.size() * sizeof(__half), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_a.get(), a.data(), a.size() * sizeof(__half), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_b.get(), b.data(), b.size() * sizeof(__half), cudaMemcpyHostToDevice));
 
-    std::vector<warpforge::GemmVariant> variants{
-        warpforge::GemmVariant::tiled_fp16_fp32};
+    std::vector<warpforge::GemmVariant> variants{warpforge::GemmVariant::tiled_fp16_fp32};
     if (include_wmma) {
         variants.push_back(warpforge::GemmVariant::wmma_fp16_fp32);
     }
     for (const auto variant : variants) {
-        warpforge::gemm_fp16_cuda(
-            device_a.get(),
-            device_b.get(),
-            device_c.get(),
-            problem,
-            {warpforge::GemmBackend::custom, variant});
+        warpforge::gemm_fp16_cuda(device_a.get(), device_b.get(), device_c.get(), problem,
+                                  {warpforge::GemmBackend::custom, variant});
         CUDA_CHECK(cudaDeviceSynchronize());
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(),
-            device_c.get(),
-            actual.size() * sizeof(float),
-            cudaMemcpyDeviceToHost));
-        require_valid(
-            expected,
-            actual,
-            warpforge::gemm_fp16_tolerance(problem.k),
-            warpforge::gemm_variant_name(variant));
+        CUDA_CHECK(cudaMemcpy(actual.data(), device_c.get(), actual.size() * sizeof(float),
+                              cudaMemcpyDeviceToHost));
+        require_valid(expected, actual, warpforge::gemm_fp16_tolerance(problem.k),
+                      warpforge::gemm_variant_name(variant));
     }
 
     warpforge::gemm_fp16_cuda(
-        device_a.get(),
-        device_b.get(),
-        device_c.get(),
-        problem,
-        {warpforge::GemmBackend::cublas, warpforge::GemmVariant::tiled_fp16_fp32},
-        handle);
+        device_a.get(), device_b.get(), device_c.get(), problem,
+        {warpforge::GemmBackend::cublas, warpforge::GemmVariant::tiled_fp16_fp32}, handle);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(),
-        device_c.get(),
-        actual.size() * sizeof(float),
-        cudaMemcpyDeviceToHost));
-    require_valid(
-        expected,
-        actual,
-        warpforge::gemm_fp16_tolerance(problem.k),
-        "cuBLAS FP16/FP32");
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_c.get(), actual.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    require_valid(expected, actual, warpforge::gemm_fp16_tolerance(problem.k), "cuBLAS FP16/FP32");
 }
 
 void test_empty_and_invalid() {
     warpforge::gemm_cpu_fp32(nullptr, nullptr, nullptr, {0U, 7U, 3U});
-    warpforge::gemm_fp32_cuda(
-        nullptr,
-        nullptr,
-        nullptr,
-        {4U, 0U, 3U},
-        {warpforge::GemmBackend::custom, warpforge::GemmVariant::naive_fp32});
+    warpforge::gemm_fp32_cuda(nullptr, nullptr, nullptr, {4U, 0U, 3U},
+                              {warpforge::GemmBackend::custom, warpforge::GemmVariant::naive_fp32});
 
     bool null_threw = false;
     try {
         warpforge::gemm_fp32_cuda(
-            nullptr,
-            nullptr,
-            nullptr,
-            {2U, 3U, 4U},
+            nullptr, nullptr, nullptr, {2U, 3U, 4U},
             {warpforge::GemmBackend::custom, warpforge::GemmVariant::naive_fp32});
     } catch (const std::invalid_argument&) {
         null_threw = true;
@@ -273,10 +212,7 @@ void test_empty_and_invalid() {
     TestDeviceBuffer<float> c(17U * 16U);
     try {
         warpforge::gemm_fp16_cuda(
-            a.get(),
-            b.get(),
-            c.get(),
-            {17U, 16U, 16U},
+            a.get(), b.get(), c.get(), {17U, 16U, 16U},
             {warpforge::GemmBackend::custom, warpforge::GemmVariant::wmma_fp16_fp32});
     } catch (const std::invalid_argument&) {
         wmma_shape_threw = true;
@@ -286,18 +222,15 @@ void test_empty_and_invalid() {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
         TestCublasHandle handle;
         constexpr std::array problems{
-            warpforge::GemmProblem{1U, 1U, 1U},
-            warpforge::GemmProblem{3U, 5U, 7U},
-            warpforge::GemmProblem{15U, 17U, 13U},
-            warpforge::GemmProblem{16U, 16U, 16U},
-            warpforge::GemmProblem{17U, 31U, 33U},
-            warpforge::GemmProblem{32U, 32U, 32U},
+            warpforge::GemmProblem{1U, 1U, 1U},    warpforge::GemmProblem{3U, 5U, 7U},
+            warpforge::GemmProblem{15U, 17U, 13U}, warpforge::GemmProblem{16U, 16U, 16U},
+            warpforge::GemmProblem{17U, 31U, 33U}, warpforge::GemmProblem{32U, 32U, 32U},
             warpforge::GemmProblem{65U, 47U, 33U},
         };
         for (const auto& problem : problems) {

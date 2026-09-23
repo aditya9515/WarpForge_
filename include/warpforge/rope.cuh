@@ -22,11 +22,7 @@ inline constexpr unsigned int rope_default_block_size = 256U;
 
 void rope_cpu(const float* input, float* output, const RopeProblem& problem);
 
-void rope_cuda(
-    const float* input,
-    float* output,
-    const RopeProblem& problem,
-    unsigned int block_size = rope_default_block_size,
-    cudaStream_t stream = nullptr);
+void rope_cuda(const float* input, float* output, const RopeProblem& problem,
+               unsigned int block_size = rope_default_block_size, cudaStream_t stream = nullptr);
 
-}  // namespace warpforge
+} // namespace warpforge

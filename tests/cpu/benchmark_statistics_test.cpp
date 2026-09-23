@@ -10,13 +10,14 @@
 
 namespace {
 
-void require_close(const double actual, const double expected, const double tolerance, const char* message) {
+void require_close(const double actual, const double expected, const double tolerance,
+                   const char* message) {
     if (std::abs(actual - expected) > tolerance) {
         throw std::runtime_error(message);
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
@@ -28,11 +29,8 @@ int main() {
         require_close(statistics.mean_ms, 2.5, 1.0e-12, "mean mismatch");
         require_close(statistics.median_ms, 2.5, 1.0e-12, "median mismatch");
         require_close(statistics.p95_ms, 3.85, 1.0e-12, "p95 mismatch");
-        require_close(
-            statistics.standard_deviation_ms,
-            std::sqrt(5.0 / 3.0),
-            1.0e-12,
-            "sample standard deviation mismatch");
+        require_close(statistics.standard_deviation_ms, std::sqrt(5.0 / 3.0), 1.0e-12,
+                      "sample standard deviation mismatch");
 
         const auto single = warpforge::summarize_samples({7.0});
         require_close(single.standard_deviation_ms, 0.0, 1.0e-12, "single-sample deviation");
@@ -61,9 +59,8 @@ int main() {
         require_close(zeros.p95_ms, 0.0, 0.0, "zero samples should remain zero");
         require_close(zeros.standard_deviation_ms, 0.0, 0.0, "zero deviation mismatch");
 
-        for (const double invalid : {
-                 std::numeric_limits<double>::quiet_NaN(),
-                 std::numeric_limits<double>::infinity()}) {
+        for (const double invalid :
+             {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
             bool invalid_threw = false;
             try {
                 static_cast<void>(warpforge::summarize_samples({1.0, invalid}));

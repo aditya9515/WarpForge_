@@ -48,7 +48,7 @@ struct MiniInferHostWeights final {
 };
 
 class MiniInferWeights final {
-public:
+  public:
     explicit MiniInferWeights(const MiniInferConfig& config);
     ~MiniInferWeights() noexcept = default;
 
@@ -58,22 +58,40 @@ public:
     MiniInferWeights& operator=(MiniInferWeights&&) = delete;
 
     void upload(const MiniInferHostWeights& weights, cudaStream_t stream);
-    [[nodiscard]] bool uploaded() const noexcept { return uploaded_; }
+    [[nodiscard]] bool uploaded() const noexcept {
+        return uploaded_;
+    }
     [[nodiscard]] std::size_t parameter_bytes() const noexcept;
 
     [[nodiscard]] const TensorView& attention_norm_view() const noexcept {
         return attention_norm_view_;
     }
-    [[nodiscard]] const TensorView& query_view() const noexcept { return query_view_; }
-    [[nodiscard]] const TensorView& key_view() const noexcept { return key_view_; }
-    [[nodiscard]] const TensorView& value_view() const noexcept { return value_view_; }
-    [[nodiscard]] const TensorView& output_view() const noexcept { return output_view_; }
-    [[nodiscard]] const TensorView& ffn_norm_view() const noexcept { return ffn_norm_view_; }
-    [[nodiscard]] const TensorView& gate_view() const noexcept { return gate_view_; }
-    [[nodiscard]] const TensorView& up_view() const noexcept { return up_view_; }
-    [[nodiscard]] const TensorView& down_view() const noexcept { return down_view_; }
+    [[nodiscard]] const TensorView& query_view() const noexcept {
+        return query_view_;
+    }
+    [[nodiscard]] const TensorView& key_view() const noexcept {
+        return key_view_;
+    }
+    [[nodiscard]] const TensorView& value_view() const noexcept {
+        return value_view_;
+    }
+    [[nodiscard]] const TensorView& output_view() const noexcept {
+        return output_view_;
+    }
+    [[nodiscard]] const TensorView& ffn_norm_view() const noexcept {
+        return ffn_norm_view_;
+    }
+    [[nodiscard]] const TensorView& gate_view() const noexcept {
+        return gate_view_;
+    }
+    [[nodiscard]] const TensorView& up_view() const noexcept {
+        return up_view_;
+    }
+    [[nodiscard]] const TensorView& down_view() const noexcept {
+        return down_view_;
+    }
 
-private:
+  private:
     MiniInferConfig config_;
     Tensor attention_norm_;
     Tensor query_;
@@ -117,7 +135,7 @@ struct MiniInferActivations final {
 };
 
 class MiniInferWorkspace final {
-public:
+  public:
     explicit MiniInferWorkspace(const MiniInferConfig& config);
     ~MiniInferWorkspace() noexcept = default;
 
@@ -126,17 +144,23 @@ public:
     MiniInferWorkspace(MiniInferWorkspace&&) = delete;
     MiniInferWorkspace& operator=(MiniInferWorkspace&&) = delete;
 
-    [[nodiscard]] MiniInferActivations& activations() noexcept { return activations_; }
+    [[nodiscard]] MiniInferActivations& activations() noexcept {
+        return activations_;
+    }
     [[nodiscard]] const MiniInferActivations& activations() const noexcept {
         return activations_;
     }
-    [[nodiscard]] void* native_handle() noexcept { return storage_.native_handle(); }
+    [[nodiscard]] void* native_handle() noexcept {
+        return storage_.native_handle();
+    }
     [[nodiscard]] std::size_t capacity_bytes() const noexcept {
         return storage_.capacity_bytes();
     }
-    [[nodiscard]] std::size_t used_bytes() const noexcept { return storage_.used_bytes(); }
+    [[nodiscard]] std::size_t used_bytes() const noexcept {
+        return storage_.used_bytes();
+    }
 
-private:
+  private:
     DeviceWorkspace storage_;
     MiniInferActivations activations_;
 };
@@ -145,7 +169,7 @@ using MiniInferIntermediateObserver =
     std::function<void(std::string_view, const TensorView&, cudaStream_t)>;
 
 class MiniInferBlock final {
-public:
+  public:
     explicit MiniInferBlock(MiniInferConfig config = {});
     ~MiniInferBlock() noexcept = default;
 
@@ -155,20 +179,24 @@ public:
     MiniInferBlock& operator=(MiniInferBlock&&) = delete;
 
     void upload_weights(const MiniInferHostWeights& weights, cudaStream_t stream);
-    void forward(
-        const TensorView& input,
-        TensorView& output,
-        GemmBackend backend,
-        cublasHandle_t cublas_handle,
-        cudaStream_t stream,
-        const MiniInferIntermediateObserver& observer = {});
+    void forward(const TensorView& input, TensorView& output, GemmBackend backend,
+                 cublasHandle_t cublas_handle, cudaStream_t stream,
+                 const MiniInferIntermediateObserver& observer = {});
 
-    [[nodiscard]] const MiniInferConfig& config() const noexcept { return config_; }
-    [[nodiscard]] const MiniInferWeights& weights() const noexcept { return weights_; }
-    [[nodiscard]] MiniInferWorkspace& workspace() noexcept { return workspace_; }
-    [[nodiscard]] const MiniInferWorkspace& workspace() const noexcept { return workspace_; }
+    [[nodiscard]] const MiniInferConfig& config() const noexcept {
+        return config_;
+    }
+    [[nodiscard]] const MiniInferWeights& weights() const noexcept {
+        return weights_;
+    }
+    [[nodiscard]] MiniInferWorkspace& workspace() noexcept {
+        return workspace_;
+    }
+    [[nodiscard]] const MiniInferWorkspace& workspace() const noexcept {
+        return workspace_;
+    }
 
-private:
+  private:
     MiniInferConfig config_;
     MiniInferWeights weights_;
     MiniInferWorkspace workspace_;
@@ -183,11 +211,9 @@ struct MiniInferFixture final {
     std::map<std::string, std::vector<float>> intermediates;
 };
 
-[[nodiscard]] MiniInferFixture load_miniinfer_fixture(
-    const std::filesystem::path& directory);
+[[nodiscard]] MiniInferFixture load_miniinfer_fixture(const std::filesystem::path& directory);
 [[nodiscard]] std::vector<std::string_view> miniinfer_intermediate_names();
-[[nodiscard]] Tolerance miniinfer_intermediate_tolerance(
-    std::string_view name,
-    const MiniInferConfig& config) noexcept;
+[[nodiscard]] Tolerance miniinfer_intermediate_tolerance(std::string_view name,
+                                                         const MiniInferConfig& config) noexcept;
 
-}  // namespace warpforge
+} // namespace warpforge

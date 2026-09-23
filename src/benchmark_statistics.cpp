@@ -20,15 +20,14 @@ double percentile(const std::vector<double>& sorted_samples, const double probab
     return sorted_samples[lower] + fraction * (sorted_samples[upper] - sorted_samples[lower]);
 }
 
-}  // namespace
+} // namespace
 
 BenchmarkStatistics summarize_samples(const std::vector<double>& samples_ms) {
     if (samples_ms.empty()) {
         throw std::invalid_argument("cannot summarize an empty benchmark sample set");
     }
-    if (std::any_of(samples_ms.begin(), samples_ms.end(), [](const double value) {
-            return !std::isfinite(value) || value < 0.0;
-        })) {
+    if (std::any_of(samples_ms.begin(), samples_ms.end(),
+                    [](const double value) { return !std::isfinite(value) || value < 0.0; })) {
         throw std::invalid_argument("benchmark samples must be finite and non-negative");
     }
 
@@ -38,9 +37,8 @@ BenchmarkStatistics summarize_samples(const std::vector<double>& samples_ms) {
     BenchmarkStatistics statistics;
     statistics.sample_count = samples_ms.size();
     statistics.minimum_ms = sorted_samples.front();
-    statistics.mean_ms =
-        std::accumulate(samples_ms.begin(), samples_ms.end(), 0.0) /
-        static_cast<double>(samples_ms.size());
+    statistics.mean_ms = std::accumulate(samples_ms.begin(), samples_ms.end(), 0.0) /
+                         static_cast<double>(samples_ms.size());
     statistics.median_ms = percentile(sorted_samples, 0.5);
     statistics.p95_ms = percentile(sorted_samples, 0.95);
 
@@ -50,10 +48,10 @@ BenchmarkStatistics summarize_samples(const std::vector<double>& samples_ms) {
             const double difference = sample - statistics.mean_ms;
             squared_difference_sum += difference * difference;
         }
-        statistics.standard_deviation_ms = std::sqrt(
-            squared_difference_sum / static_cast<double>(samples_ms.size() - 1));
+        statistics.standard_deviation_ms =
+            std::sqrt(squared_difference_sum / static_cast<double>(samples_ms.size() - 1));
     }
     return statistics;
 }
 
-}  // namespace warpforge
+} // namespace warpforge

@@ -29,8 +29,7 @@ struct Options final {
     bool show_help{};
 };
 
-template <typename T>
-using LocalDeviceAllocation = warpforge::DeviceBuffer<T>;
+template <typename T> using LocalDeviceAllocation = warpforge::DeviceBuffer<T>;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
     if (text.empty() || text.front() == '-') {
@@ -101,7 +100,7 @@ double effective_bandwidth_gbps(const std::size_t element_count, const double la
     return logical_bytes / (latency_ms * 1.0e6);
 }
 
-}  // namespace
+} // namespace
 
 int main(const int argument_count, char** arguments) {
     try {
@@ -131,8 +130,8 @@ int main(const int argument_count, char** arguments) {
             left[index] = distribution(generator);
             right[index] = distribution(generator);
         }
-        warpforge::vector_add_cpu(
-            left.data(), right.data(), expected.data(), options.element_count);
+        warpforge::vector_add_cpu(left.data(), right.data(), expected.data(),
+                                  options.element_count);
 
         LocalDeviceAllocation<float> device_left(options.element_count);
         LocalDeviceAllocation<float> device_right(options.element_count);
@@ -142,8 +141,8 @@ int main(const int argument_count, char** arguments) {
         CUDA_CHECK(cudaMemcpy(device_left.get(), left.data(), bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(device_right.get(), right.data(), bytes, cudaMemcpyHostToDevice));
 
-        warpforge::vector_add_cuda(
-            device_left.get(), device_right.get(), device_output.get(), options.element_count);
+        warpforge::vector_add_cuda(device_left.get(), device_right.get(), device_output.get(),
+                                   options.element_count);
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), bytes, cudaMemcpyDeviceToHost));
 
@@ -157,20 +156,13 @@ int main(const int argument_count, char** arguments) {
             return EXIT_FAILURE;
         }
 
-        const std::vector<double> samples_ms = warpforge::measure_cuda_kernel(
-            options.benchmark,
-            nullptr,
-            [&](cudaStream_t stream) {
-                warpforge::vector_add_cuda(
-                    device_left.get(),
-                    device_right.get(),
-                    device_output.get(),
-                    options.element_count,
-                    warpforge::vector_add_default_block_size,
-                    stream);
+        const std::vector<double> samples_ms =
+            warpforge::measure_cuda_kernel(options.benchmark, nullptr, [&](cudaStream_t stream) {
+                warpforge::vector_add_cuda(device_left.get(), device_right.get(),
+                                           device_output.get(), options.element_count,
+                                           warpforge::vector_add_default_block_size, stream);
             });
-        const warpforge::BenchmarkStatistics statistics =
-            warpforge::summarize_samples(samples_ms);
+        const warpforge::BenchmarkStatistics statistics = warpforge::summarize_samples(samples_ms);
 
         const unsigned int grid_size = warpforge::vector_add_grid_size(options.element_count);
         warpforge::LaunchConfiguration launch;
@@ -180,11 +172,8 @@ int main(const int argument_count, char** arguments) {
         warpforge::BenchmarkResult result;
         result.config = options.benchmark;
         result.metadata = warpforge::make_benchmark_metadata(
-            "vector_add",
-            "cuda_baseline",
-            "fp32",
-            {{"elements", static_cast<std::uint64_t>(options.element_count)}},
-            launch);
+            "vector_add", "cuda_baseline", "fp32",
+            {{"elements", static_cast<std::uint64_t>(options.element_count)}}, launch);
         result.statistics = statistics;
         result.validation = validation;
         result.metrics["effective_bandwidth_gbps_from_median"] =

@@ -16,7 +16,7 @@ void require(const bool condition, const char* message) {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {

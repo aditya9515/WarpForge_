@@ -55,13 +55,16 @@ void print_device(const warpforge::DeviceInfo& device) {
               << bytes_to_kib(device.shared_memory_per_block_optin_bytes) << " KiB\n";
     std::cout << "  Shared memory per multiprocessor:  "
               << bytes_to_kib(device.shared_memory_per_multiprocessor_bytes) << " KiB\n";
-    std::cout << "  Concurrent kernels:                " << yes_no(device.concurrent_kernels) << '\n';
-    std::cout << "  Unified addressing:                " << yes_no(device.unified_addressing) << '\n';
+    std::cout << "  Concurrent kernels:                " << yes_no(device.concurrent_kernels)
+              << '\n';
+    std::cout << "  Unified addressing:                " << yes_no(device.unified_addressing)
+              << '\n';
     std::cout << "  Managed memory:                    " << yes_no(device.managed_memory) << '\n';
-    std::cout << "  Cooperative launch:                " << yes_no(device.cooperative_launch) << '\n';
+    std::cout << "  Cooperative launch:                " << yes_no(device.cooperative_launch)
+              << '\n';
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {

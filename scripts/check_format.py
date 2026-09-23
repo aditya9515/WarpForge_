@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -13,9 +14,12 @@ SOURCE_SUFFIXES = {".cpp", ".cu", ".cuh", ".hpp", ".h"}
 
 
 def main() -> int:
-    formatter = shutil.which("clang-format")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--formatter", default="clang-format", help="formatter executable or path")
+    arguments = parser.parse_args()
+    formatter = shutil.which(arguments.formatter)
     if formatter is None:
-        print("clang-format is required for the formatting check", file=sys.stderr)
+        print(f"{arguments.formatter} is required for the formatting check", file=sys.stderr)
         return 2
     output = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT)
     files = [

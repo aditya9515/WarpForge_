@@ -17,7 +17,7 @@
 namespace {
 
 class DeviceBuffer final {
-public:
+  public:
     explicit DeviceBuffer(const std::size_t count) {
         if (count > 0U) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
@@ -30,21 +30,21 @@ public:
     }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
-    [[nodiscard]] float* get() const noexcept { return pointer_; }
+    [[nodiscard]] float* get() const noexcept {
+        return pointer_;
+    }
 
-private:
+  private:
     float* pointer_{};
 };
 
-void require_valid(
-    const std::vector<float>& expected,
-    const std::vector<float>& actual,
-    const std::string& label) {
-    const auto validation = warpforge::validate_fp32(
-        expected.data(), actual.data(), actual.size(), {1.0e-5, 1.0e-5});
+void require_valid(const std::vector<float>& expected, const std::vector<float>& actual,
+                   const std::string& label) {
+    const auto validation =
+        warpforge::validate_fp32(expected.data(), actual.data(), actual.size(), {1.0e-5, 1.0e-5});
     if (!validation.passed) {
-        throw std::runtime_error(
-            label + " failed at index " + std::to_string(validation.worst_index));
+        throw std::runtime_error(label + " failed at index " +
+                                 std::to_string(validation.worst_index));
     }
 }
 
@@ -70,19 +70,16 @@ void run_case(const std::size_t count) {
     DeviceBuffer device_output(count);
     DeviceBuffer device_intermediate(count);
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(
-            device_right.get(), right.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_left.get(), left.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_right.get(), right.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
     }
     const auto read_output = [&]() {
         CUDA_CHECK(cudaDeviceSynchronize());
         if (count > 0U) {
-            CUDA_CHECK(cudaMemcpy(
-                actual.data(),
-                device_output.get(),
-                count * sizeof(float),
-                cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), count * sizeof(float),
+                                  cudaMemcpyDeviceToHost));
         }
     };
 
@@ -97,8 +94,7 @@ void run_case(const std::size_t count) {
     require_valid(expected, actual, "add");
 
     warpforge::multiply_cpu(left.data(), right.data(), expected.data(), count);
-    warpforge::multiply_cuda(
-        device_left.get(), device_right.get(), device_output.get(), count);
+    warpforge::multiply_cuda(device_left.get(), device_right.get(), device_output.get(), count);
     read_output();
     require_valid(expected, actual, "multiply");
 
@@ -107,14 +103,9 @@ void run_case(const std::size_t count) {
     read_output();
     require_valid(expected, actual, "scale");
 
-    warpforge::swiglu_unfused_cpu(
-        left.data(), right.data(), actual.data(), expected.data(), count);
-    warpforge::swiglu_unfused_cuda(
-        device_left.get(),
-        device_right.get(),
-        device_intermediate.get(),
-        device_output.get(),
-        count);
+    warpforge::swiglu_unfused_cpu(left.data(), right.data(), actual.data(), expected.data(), count);
+    warpforge::swiglu_unfused_cuda(device_left.get(), device_right.get(), device_intermediate.get(),
+                                   device_output.get(), count);
     read_output();
     require_valid(expected, actual, "unfused SwiGLU");
 }
@@ -132,40 +123,35 @@ void test_aliasing() {
     DeviceBuffer device_left(count);
     DeviceBuffer device_right(count);
     DeviceBuffer intermediate(count);
-    CUDA_CHECK(cudaMemcpy(
-        device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(
-        device_right.get(), right.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(device_right.get(), right.data(), count * sizeof(float),
+                          cudaMemcpyHostToDevice));
 
     warpforge::silu_cpu(left.data(), expected.data(), count);
     warpforge::silu_cuda(device_left.get(), device_left.get(), count);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(), device_left.get(), count * sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_left.get(), count * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     require_valid(expected, actual, "in-place SiLU");
 
-    CUDA_CHECK(cudaMemcpy(
-        device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
     warpforge::add_cpu(left.data(), right.data(), expected.data(), count);
     warpforge::add_cuda(device_left.get(), device_right.get(), device_left.get(), count);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(), device_left.get(), count * sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_left.get(), count * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     require_valid(expected, actual, "aliased add");
 
-    CUDA_CHECK(cudaMemcpy(
-        device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-    warpforge::swiglu_unfused_cpu(
-        left.data(), right.data(), actual.data(), expected.data(), count);
-    warpforge::swiglu_unfused_cuda(
-        device_left.get(),
-        device_right.get(),
-        intermediate.get(),
-        device_left.get(),
-        count);
+    CUDA_CHECK(
+        cudaMemcpy(device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    warpforge::swiglu_unfused_cpu(left.data(), right.data(), actual.data(), expected.data(), count);
+    warpforge::swiglu_unfused_cuda(device_left.get(), device_right.get(), intermediate.get(),
+                                   device_left.get(), count);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(), device_left.get(), count * sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_left.get(), count * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     require_valid(expected, actual, "SwiGLU output alias");
 }
 
@@ -175,8 +161,7 @@ void test_invalid_arguments() {
     DeviceBuffer value(1U);
     DeviceBuffer other(1U);
     try {
-        warpforge::swiglu_unfused_cuda(
-            value.get(), other.get(), value.get(), other.get(), 1U);
+        warpforge::swiglu_unfused_cuda(value.get(), other.get(), value.get(), other.get(), 1U);
     } catch (const std::invalid_argument&) {
         alias_threw = true;
     }
@@ -185,12 +170,11 @@ void test_invalid_arguments() {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
-        constexpr std::array<std::size_t, 8> sizes{
-            0U, 1U, 17U, 31U, 32U, 33U, 1003U, 1U << 20U};
+        constexpr std::array<std::size_t, 8> sizes{0U, 1U, 17U, 31U, 32U, 33U, 1003U, 1U << 20U};
         for (const std::size_t size : sizes) {
             run_case(size);
         }

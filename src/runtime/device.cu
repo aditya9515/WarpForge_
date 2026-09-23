@@ -62,4 +62,4 @@ DeviceInfo query_device(const int device_index) {
     return info;
 }
 
-}  // namespace warpforge
+} // namespace warpforge

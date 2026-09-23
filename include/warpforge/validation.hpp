@@ -21,10 +21,7 @@ struct ValidationResult final {
     float actual_at_worst{};
 };
 
-[[nodiscard]] ValidationResult validate_fp32(
-    const float* expected,
-    const float* actual,
-    std::size_t element_count,
-    Tolerance tolerance = {});
+[[nodiscard]] ValidationResult validate_fp32(const float* expected, const float* actual,
+                                             std::size_t element_count, Tolerance tolerance = {});
 
-}  // namespace warpforge
+} // namespace warpforge

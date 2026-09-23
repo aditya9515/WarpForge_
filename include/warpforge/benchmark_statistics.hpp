@@ -16,4 +16,4 @@ struct BenchmarkStatistics final {
 
 [[nodiscard]] BenchmarkStatistics summarize_samples(const std::vector<double>& samples_ms);
 
-}  // namespace warpforge
+} // namespace warpforge

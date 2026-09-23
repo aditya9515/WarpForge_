@@ -59,19 +59,14 @@ struct BenchmarkResult final {
 
 using CudaWork = std::function<void(cudaStream_t)>;
 
-[[nodiscard]] std::vector<double> measure_cuda_kernel(
-    const BenchmarkConfig& config,
-    cudaStream_t stream,
-    const CudaWork& work);
+[[nodiscard]] std::vector<double> measure_cuda_kernel(const BenchmarkConfig& config,
+                                                      cudaStream_t stream, const CudaWork& work);
 
-[[nodiscard]] BenchmarkMetadata make_benchmark_metadata(
-    std::string operation,
-    std::string implementation,
-    std::string data_type,
-    std::map<std::string, std::uint64_t> dimensions,
-    LaunchConfiguration launch,
-    int device_index = 0);
+[[nodiscard]] BenchmarkMetadata
+make_benchmark_metadata(std::string operation, std::string implementation, std::string data_type,
+                        std::map<std::string, std::uint64_t> dimensions, LaunchConfiguration launch,
+                        int device_index = 0);
 
 void write_benchmark_json(const BenchmarkResult& result, const std::filesystem::path& output_path);
 
-}  // namespace warpforge
+} // namespace warpforge

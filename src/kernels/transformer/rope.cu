@@ -9,10 +9,8 @@
 namespace warpforge {
 namespace {
 
-[[nodiscard]] std::size_t checked_product(
-    const std::size_t left,
-    const std::size_t right,
-    const char* label) {
+[[nodiscard]] std::size_t checked_product(const std::size_t left, const std::size_t right,
+                                          const char* label) {
     if (left != 0U && right > std::numeric_limits<std::size_t>::max() / left) {
         throw std::overflow_error(std::string(label) + " overflows size_t");
     }
@@ -26,25 +24,18 @@ void validate_problem(const RopeProblem& problem) {
     if (problem.head_dimension % 2U != 0U) {
         throw std::invalid_argument("RoPE head dimension must be even");
     }
-    if (problem.sequence > 0U &&
-        problem.position_offset >
-            std::numeric_limits<std::size_t>::max() - (problem.sequence - 1U)) {
+    if (problem.sequence > 0U && problem.position_offset > std::numeric_limits<std::size_t>::max() -
+                                                               (problem.sequence - 1U)) {
         throw std::overflow_error("RoPE position range overflows size_t");
     }
     static_cast<void>(rope_element_count(problem));
 }
 
-__global__ void rope_kernel(
-    const float* input,
-    float* output,
-    const std::size_t pair_count,
-    const std::size_t sequence,
-    const std::size_t heads,
-    const std::size_t head_dimension,
-    const std::size_t position_offset,
-    const float base) {
-    const std::size_t pair_index =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+__global__ void rope_kernel(const float* input, float* output, const std::size_t pair_count,
+                            const std::size_t sequence, const std::size_t heads,
+                            const std::size_t head_dimension, const std::size_t position_offset,
+                            const float base) {
+    const std::size_t pair_index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (pair_index >= pair_count) {
         return;
     }
@@ -54,10 +45,8 @@ __global__ void rope_kernel(
     const std::size_t token = head_group / heads;
     const std::size_t sequence_index = token % sequence;
     const std::size_t element = head_group * head_dimension + pair * 2U;
-    const float exponent =
-        -2.0F * static_cast<float>(pair) / static_cast<float>(head_dimension);
-    const float angle =
-        static_cast<float>(position_offset + sequence_index) * powf(base, exponent);
+    const float exponent = -2.0F * static_cast<float>(pair) / static_cast<float>(head_dimension);
+    const float angle = static_cast<float>(position_offset + sequence_index) * powf(base, exponent);
     float sine = 0.0F;
     float cosine = 0.0F;
     sincosf(angle, &sine, &cosine);
@@ -67,7 +56,7 @@ __global__ void rope_kernel(
     output[element + 1U] = first * sine + second * cosine;
 }
 
-}  // namespace
+} // namespace
 
 std::size_t rope_element_count(const RopeProblem& problem) {
     const std::size_t tokens = checked_product(problem.batch, problem.sequence, "RoPE token count");
@@ -82,10 +71,7 @@ std::size_t rope_pair_count(const RopeProblem& problem) {
     return rope_element_count(problem) / 2U;
 }
 
-void rope_cpu(
-    const float* input,
-    float* output,
-    const RopeProblem& problem) {
+void rope_cpu(const float* input, float* output, const RopeProblem& problem) {
     validate_problem(problem);
     const std::size_t pair_count = rope_pair_count(problem);
     if (pair_count == 0U) {
@@ -101,11 +87,10 @@ void rope_cpu(
         const std::size_t token = head_group / problem.heads;
         const std::size_t sequence_index = token % problem.sequence;
         const std::size_t element = head_group * problem.head_dimension + pair * 2U;
-        const double exponent = -2.0 * static_cast<double>(pair) /
-                                static_cast<double>(problem.head_dimension);
-        const double angle =
-            static_cast<double>(problem.position_offset + sequence_index) *
-            std::pow(static_cast<double>(problem.base), exponent);
+        const double exponent =
+            -2.0 * static_cast<double>(pair) / static_cast<double>(problem.head_dimension);
+        const double angle = static_cast<double>(problem.position_offset + sequence_index) *
+                             std::pow(static_cast<double>(problem.base), exponent);
         const double sine = std::sin(angle);
         const double cosine = std::cos(angle);
         const double first = input[element];
@@ -115,12 +100,8 @@ void rope_cpu(
     }
 }
 
-void rope_cuda(
-    const float* input,
-    float* output,
-    const RopeProblem& problem,
-    const unsigned int block_size,
-    const cudaStream_t stream) {
+void rope_cuda(const float* input, float* output, const RopeProblem& problem,
+               const unsigned int block_size, const cudaStream_t stream) {
     validate_problem(problem);
     if (block_size == 0U || block_size > 1024U) {
         throw std::invalid_argument("RoPE block size must be from 1 through 1024");
@@ -137,15 +118,9 @@ void rope_cuda(
         throw std::overflow_error("RoPE grid exceeds the CUDA x-dimension range");
     }
     rope_kernel<<<static_cast<unsigned int>(grid), block_size, 0U, stream>>>(
-        input,
-        output,
-        pair_count,
-        problem.sequence,
-        problem.heads,
-        problem.head_dimension,
-        problem.position_offset,
-        problem.base);
+        input, output, pair_count, problem.sequence, problem.heads, problem.head_dimension,
+        problem.position_offset, problem.base);
     CUDA_CHECK(cudaGetLastError());
 }
 
-}  // namespace warpforge
+} // namespace warpforge

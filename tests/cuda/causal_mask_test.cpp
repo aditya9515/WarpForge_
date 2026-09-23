@@ -16,7 +16,7 @@
 namespace {
 
 class DeviceBuffer final {
-public:
+  public:
     explicit DeviceBuffer(const std::size_t count) {
         if (count > 0U) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
@@ -29,9 +29,11 @@ public:
     }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
-    [[nodiscard]] float* get() const noexcept { return pointer_; }
+    [[nodiscard]] float* get() const noexcept {
+        return pointer_;
+    }
 
-private:
+  private:
     float* pointer_{};
 };
 
@@ -47,21 +49,21 @@ void run_case(const warpforge::CausalMaskProblem& problem, const bool in_place =
     DeviceBuffer device_input(count);
     DeviceBuffer device_output(in_place ? 0U : count);
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
     }
     float* output = in_place ? device_input.get() : device_output.get();
     warpforge::causal_mask_cuda(device_input.get(), output, problem);
     CUDA_CHECK(cudaDeviceSynchronize());
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(
+            cudaMemcpy(actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
     }
-    const auto validation = warpforge::validate_fp32(
-        expected.data(), actual.data(), count, {0.0, 0.0});
+    const auto validation =
+        warpforge::validate_fp32(expected.data(), actual.data(), count, {0.0, 0.0});
     if (!validation.passed) {
-        throw std::runtime_error(
-            "causal mask failed at index " + std::to_string(validation.worst_index));
+        throw std::runtime_error("causal mask failed at index " +
+                                 std::to_string(validation.worst_index));
     }
 }
 
@@ -86,7 +88,7 @@ void test_empty() {
     warpforge::causal_mask_cuda(nullptr, nullptr, {1U, 8U, 0U, 17U, 0U});
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {

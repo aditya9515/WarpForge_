@@ -48,8 +48,7 @@ struct RecordedResult final {
     warpforge::BenchmarkResult result;
 };
 
-template <typename T>
-using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
+template <typename T> using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
 using LocalStream = warpforge::CudaStream;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
@@ -141,22 +140,19 @@ void validate_options(const Options& options) {
     if (options.benchmark.measurement_iterations == 0U) {
         throw std::invalid_argument("--iterations must be greater than zero");
     }
-    const warpforge::RopeProblem rope{
-        1U, options.sequence, options.heads, options.head_dimension, 17U, 10000.0F};
+    const warpforge::RopeProblem rope{1U,  options.sequence, options.heads, options.head_dimension,
+                                      17U, 10000.0F};
     static_cast<void>(warpforge::rope_element_count(rope));
-    const warpforge::CausalMaskProblem mask{
-        1U, options.heads, options.mask_length, options.mask_length, 0U};
+    const warpforge::CausalMaskProblem mask{1U, options.heads, options.mask_length,
+                                            options.mask_length, 0U};
     static_cast<void>(warpforge::causal_mask_element_count(mask));
     if (options.rows > std::numeric_limits<std::size_t>::max() / options.columns) {
         throw std::overflow_error("row-wise benchmark element count overflows size_t");
     }
 }
 
-std::vector<float> random_values(
-    const std::size_t count,
-    const std::uint64_t seed,
-    const float minimum,
-    const float maximum) {
+std::vector<float> random_values(const std::size_t count, const std::uint64_t seed,
+                                 const float minimum, const float maximum) {
     std::vector<float> values(count);
     std::mt19937_64 generator(seed);
     std::uniform_real_distribution<float> distribution(minimum, maximum);
@@ -166,168 +162,120 @@ std::vector<float> random_values(
     return values;
 }
 
-RecordedResult measure_case(
-    const std::string& filename,
-    warpforge::BenchmarkMetadata metadata,
-    const warpforge::BenchmarkConfig& config,
-    const warpforge::Tolerance tolerance,
-    const std::vector<float>& expected,
-    const float* device_output,
-    const std::size_t logical_bytes,
-    const warpforge::CudaWork& work,
-    const cudaStream_t stream) {
+RecordedResult measure_case(const std::string& filename, warpforge::BenchmarkMetadata metadata,
+                            const warpforge::BenchmarkConfig& config,
+                            const warpforge::Tolerance tolerance,
+                            const std::vector<float>& expected, const float* device_output,
+                            const std::size_t logical_bytes, const warpforge::CudaWork& work,
+                            const cudaStream_t stream) {
     work(stream);
     CUDA_CHECK(cudaStreamSynchronize(stream));
     std::vector<float> actual(expected.size());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(),
-        device_output,
-        actual.size() * sizeof(float),
-        cudaMemcpyDeviceToHost));
-    const auto validation = warpforge::validate_fp32(
-        expected.data(), actual.data(), actual.size(), tolerance);
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_output, actual.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    const auto validation =
+        warpforge::validate_fp32(expected.data(), actual.data(), actual.size(), tolerance);
     if (!validation.passed) {
-        throw std::runtime_error(
-            metadata.operation + "/" + metadata.implementation +
-            " failed validation at index " + std::to_string(validation.worst_index));
+        throw std::runtime_error(metadata.operation + "/" + metadata.implementation +
+                                 " failed validation at index " +
+                                 std::to_string(validation.worst_index));
     }
     auto samples = warpforge::measure_cuda_kernel(config, stream, work);
     const auto statistics = warpforge::summarize_samples(samples);
-    const double bandwidth = static_cast<double>(logical_bytes) /
-                             (statistics.median_ms * 1.0e6);
-    warpforge::BenchmarkResult result{
-        1,
-        config,
-        std::move(metadata),
-        statistics,
-        validation,
-        {{"logical_bytes", static_cast<double>(logical_bytes)},
-         {"effective_bandwidth_gbps_from_median", bandwidth},
-         {"absolute_tolerance", tolerance.absolute},
-         {"relative_tolerance", tolerance.relative}},
-        std::move(samples)};
+    const double bandwidth = static_cast<double>(logical_bytes) / (statistics.median_ms * 1.0e6);
+    warpforge::BenchmarkResult result{1,
+                                      config,
+                                      std::move(metadata),
+                                      statistics,
+                                      validation,
+                                      {{"logical_bytes", static_cast<double>(logical_bytes)},
+                                       {"effective_bandwidth_gbps_from_median", bandwidth},
+                                       {"absolute_tolerance", tolerance.absolute},
+                                       {"relative_tolerance", tolerance.relative}},
+                                      std::move(samples)};
     return {filename, std::move(result)};
 }
 
-void benchmark_softmax(
-    const Options& options,
-    const cudaStream_t stream,
-    std::vector<RecordedResult>& records) {
+void benchmark_softmax(const Options& options, const cudaStream_t stream,
+                       std::vector<RecordedResult>& records) {
     const std::size_t count = options.rows * options.columns;
     const auto input = random_values(count, options.benchmark.seed, -12.0F, 12.0F);
     std::vector<float> expected(count);
-    warpforge::softmax_cpu(
-        input.data(), expected.data(), options.rows, options.columns);
+    warpforge::softmax_cpu(input.data(), expected.data(), options.rows, options.columns);
     LocalDeviceBuffer<float> device_input(count);
     LocalDeviceBuffer<float> device_output(count);
-    CUDA_CHECK(cudaMemcpy(
-        device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-    constexpr std::array variants{
-        warpforge::SoftmaxVariant::naive,
-        warpforge::SoftmaxVariant::block,
-        warpforge::SoftmaxVariant::warp};
+    CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    constexpr std::array variants{warpforge::SoftmaxVariant::naive,
+                                  warpforge::SoftmaxVariant::block,
+                                  warpforge::SoftmaxVariant::warp};
     for (const auto variant : variants) {
         const auto block = warpforge::softmax_default_block_size;
-        const unsigned int grid = variant == warpforge::SoftmaxVariant::naive
-            ? static_cast<unsigned int>((options.rows + block - 1U) / block)
-            : static_cast<unsigned int>(options.rows);
+        const unsigned int grid =
+            variant == warpforge::SoftmaxVariant::naive
+                ? static_cast<unsigned int>((options.rows + block - 1U) / block)
+                : static_cast<unsigned int>(options.rows);
         const std::string name = warpforge::softmax_variant_name(variant);
         auto metadata = warpforge::make_benchmark_metadata(
-            "softmax",
-            name,
-            "fp32",
-            {{"rows", options.rows}, {"columns", options.columns}},
+            "softmax", name, "fp32", {{"rows", options.rows}, {"columns", options.columns}},
             {{grid, 1U, 1U},
              {block, 1U, 1U},
              warpforge::softmax_dynamic_shared_memory_bytes(variant, block)});
         records.push_back(measure_case(
-            "softmax_" + name + ".json",
-            std::move(metadata),
-            options.benchmark,
-            {1.0e-5, 1.0e-5},
-            expected,
-            device_output.get(),
-            2U * count * sizeof(float),
+            "softmax_" + name + ".json", std::move(metadata), options.benchmark, {1.0e-5, 1.0e-5},
+            expected, device_output.get(), 2U * count * sizeof(float),
             [&](const cudaStream_t launch_stream) {
-                warpforge::softmax_cuda(
-                    device_input.get(),
-                    device_output.get(),
-                    options.rows,
-                    options.columns,
-                    variant,
-                    block,
-                    launch_stream);
+                warpforge::softmax_cuda(device_input.get(), device_output.get(), options.rows,
+                                        options.columns, variant, block, launch_stream);
             },
             stream));
     }
 }
 
-void benchmark_rmsnorm(
-    const Options& options,
-    const cudaStream_t stream,
-    std::vector<RecordedResult>& records) {
+void benchmark_rmsnorm(const Options& options, const cudaStream_t stream,
+                       std::vector<RecordedResult>& records) {
     const std::size_t count = options.rows * options.columns;
     const auto input = random_values(count, options.benchmark.seed + 1U, -3.0F, 3.0F);
-    const auto weight = random_values(
-        options.columns, options.benchmark.seed + 2U, 0.5F, 1.5F);
+    const auto weight = random_values(options.columns, options.benchmark.seed + 2U, 0.5F, 1.5F);
     std::vector<float> expected(count);
-    warpforge::rmsnorm_cpu(
-        input.data(), weight.data(), expected.data(), options.rows, options.columns, 1.0e-5F);
+    warpforge::rmsnorm_cpu(input.data(), weight.data(), expected.data(), options.rows,
+                           options.columns, 1.0e-5F);
     LocalDeviceBuffer<float> device_input(count);
     LocalDeviceBuffer<float> device_weight(options.columns);
     LocalDeviceBuffer<float> device_output(count);
-    CUDA_CHECK(cudaMemcpy(
-        device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(
-        device_weight.get(),
-        weight.data(),
-        options.columns * sizeof(float),
-        cudaMemcpyHostToDevice));
-    constexpr std::array variants{
-        warpforge::RmsNormVariant::naive,
-        warpforge::RmsNormVariant::block};
+    CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(device_weight.get(), weight.data(), options.columns * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    constexpr std::array variants{warpforge::RmsNormVariant::naive,
+                                  warpforge::RmsNormVariant::block};
     for (const auto variant : variants) {
         const auto block = warpforge::rmsnorm_default_block_size;
-        const unsigned int grid = variant == warpforge::RmsNormVariant::naive
-            ? static_cast<unsigned int>((options.rows + block - 1U) / block)
-            : static_cast<unsigned int>(options.rows);
+        const unsigned int grid =
+            variant == warpforge::RmsNormVariant::naive
+                ? static_cast<unsigned int>((options.rows + block - 1U) / block)
+                : static_cast<unsigned int>(options.rows);
         const std::string name = warpforge::rmsnorm_variant_name(variant);
         auto metadata = warpforge::make_benchmark_metadata(
-            "rmsnorm",
-            name,
-            "fp32",
-            {{"rows", options.rows}, {"columns", options.columns}},
+            "rmsnorm", name, "fp32", {{"rows", options.rows}, {"columns", options.columns}},
             {{grid, 1U, 1U},
              {block, 1U, 1U},
              warpforge::rmsnorm_dynamic_shared_memory_bytes(variant, block)});
         records.push_back(measure_case(
-            "rmsnorm_" + name + ".json",
-            std::move(metadata),
-            options.benchmark,
-            warpforge::rmsnorm_tolerance(options.columns),
-            expected,
-            device_output.get(),
+            "rmsnorm_" + name + ".json", std::move(metadata), options.benchmark,
+            warpforge::rmsnorm_tolerance(options.columns), expected, device_output.get(),
             3U * count * sizeof(float),
             [&](const cudaStream_t launch_stream) {
-                warpforge::rmsnorm_cuda(
-                    device_input.get(),
-                    device_weight.get(),
-                    device_output.get(),
-                    options.rows,
-                    options.columns,
-                    1.0e-5F,
-                    variant,
-                    block,
-                    launch_stream);
+                warpforge::rmsnorm_cuda(device_input.get(), device_weight.get(),
+                                        device_output.get(), options.rows, options.columns, 1.0e-5F,
+                                        variant, block, launch_stream);
             },
             stream));
     }
 }
 
-void benchmark_rope(
-    const Options& options,
-    const cudaStream_t stream,
-    std::vector<RecordedResult>& records) {
+void benchmark_rope(const Options& options, const cudaStream_t stream,
+                    std::vector<RecordedResult>& records) {
     const warpforge::RopeProblem problem{
         1U, options.sequence, options.heads, options.head_dimension, 17U, 10000.0F};
     const std::size_t count = warpforge::rope_element_count(problem);
@@ -336,15 +284,13 @@ void benchmark_rope(
     warpforge::rope_cpu(input.data(), expected.data(), problem);
     LocalDeviceBuffer<float> device_input(count);
     LocalDeviceBuffer<float> device_output(count);
-    CUDA_CHECK(cudaMemcpy(
-        device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                          cudaMemcpyHostToDevice));
     const unsigned int grid = static_cast<unsigned int>(
         (warpforge::rope_pair_count(problem) + warpforge::rope_default_block_size - 1U) /
         warpforge::rope_default_block_size);
     auto metadata = warpforge::make_benchmark_metadata(
-        "rope",
-        "interleaved_pairs",
-        "fp32",
+        "rope", "interleaved_pairs", "fp32",
         {{"batch", problem.batch},
          {"sequence", problem.sequence},
          {"heads", problem.heads},
@@ -352,29 +298,21 @@ void benchmark_rope(
          {"position_offset", problem.position_offset}},
         {{grid, 1U, 1U}, {warpforge::rope_default_block_size, 1U, 1U}, 0U});
     records.push_back(measure_case(
-        "rope_interleaved_pairs.json",
-        std::move(metadata),
-        options.benchmark,
+        "rope_interleaved_pairs.json", std::move(metadata), options.benchmark,
         // FP32 inverse-frequency rounding is amplified by long sequence positions.
-        {2.5e-4, 1.0e-5},
-        expected,
-        device_output.get(),
-        2U * count * sizeof(float),
+        {2.5e-4, 1.0e-5}, expected, device_output.get(), 2U * count * sizeof(float),
         [&](const cudaStream_t launch_stream) {
-            warpforge::rope_cuda(
-                device_input.get(), device_output.get(), problem,
-                warpforge::rope_default_block_size, launch_stream);
+            warpforge::rope_cuda(device_input.get(), device_output.get(), problem,
+                                 warpforge::rope_default_block_size, launch_stream);
         },
         stream));
 }
 
 enum class ElementwiseCase { silu, add, multiply, scale, swiglu };
 
-void benchmark_elementwise_case(
-    const Options& options,
-    const cudaStream_t stream,
-    const ElementwiseCase selected,
-    std::vector<RecordedResult>& records) {
+void benchmark_elementwise_case(const Options& options, const cudaStream_t stream,
+                                const ElementwiseCase selected,
+                                std::vector<RecordedResult>& records) {
     const std::size_t count = options.element_count;
     const auto left = random_values(count, options.benchmark.seed + 4U, -5.0F, 5.0F);
     const auto right = random_values(count, options.benchmark.seed + 5U, -3.0F, 3.0F);
@@ -384,10 +322,10 @@ void benchmark_elementwise_case(
     LocalDeviceBuffer<float> device_right(count);
     LocalDeviceBuffer<float> device_intermediate(count);
     LocalDeviceBuffer<float> device_output(count);
-    CUDA_CHECK(cudaMemcpy(
-        device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(
-        device_right.get(), right.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_left.get(), left.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(device_right.get(), right.data(), count * sizeof(float),
+                          cudaMemcpyHostToDevice));
     std::string operation;
     std::string implementation{"baseline"};
     std::size_t logical_arrays = 2U;
@@ -397,96 +335,77 @@ void benchmark_elementwise_case(
         operation = "silu";
         warpforge::silu_cpu(left.data(), expected.data(), count);
         work = [&](const cudaStream_t launch_stream) {
-            warpforge::silu_cuda(
-                device_left.get(), device_output.get(), count,
-                warpforge::elementwise_default_block_size, launch_stream);
+            warpforge::silu_cuda(device_left.get(), device_output.get(), count,
+                                 warpforge::elementwise_default_block_size, launch_stream);
         };
     } else if (selected == ElementwiseCase::add) {
         operation = "add";
         logical_arrays = 3U;
         warpforge::add_cpu(left.data(), right.data(), expected.data(), count);
         work = [&](const cudaStream_t launch_stream) {
-            warpforge::add_cuda(
-                device_left.get(), device_right.get(), device_output.get(), count,
-                warpforge::elementwise_default_block_size, launch_stream);
+            warpforge::add_cuda(device_left.get(), device_right.get(), device_output.get(), count,
+                                warpforge::elementwise_default_block_size, launch_stream);
         };
     } else if (selected == ElementwiseCase::multiply) {
         operation = "multiply";
         logical_arrays = 3U;
         warpforge::multiply_cpu(left.data(), right.data(), expected.data(), count);
         work = [&](const cudaStream_t launch_stream) {
-            warpforge::multiply_cuda(
-                device_left.get(), device_right.get(), device_output.get(), count,
-                warpforge::elementwise_default_block_size, launch_stream);
+            warpforge::multiply_cuda(device_left.get(), device_right.get(), device_output.get(),
+                                     count, warpforge::elementwise_default_block_size,
+                                     launch_stream);
         };
     } else if (selected == ElementwiseCase::scale) {
         operation = "scale";
         warpforge::scale_cpu(left.data(), 0.375F, expected.data(), count);
         work = [&](const cudaStream_t launch_stream) {
-            warpforge::scale_cuda(
-                device_left.get(), 0.375F, device_output.get(), count,
-                warpforge::elementwise_default_block_size, launch_stream);
+            warpforge::scale_cuda(device_left.get(), 0.375F, device_output.get(), count,
+                                  warpforge::elementwise_default_block_size, launch_stream);
         };
     } else {
         operation = "swiglu";
         implementation = "unfused";
         logical_arrays = 5U;
         kernel_launches = 2U;
-        warpforge::swiglu_unfused_cpu(
-            left.data(), right.data(), intermediate.data(), expected.data(), count);
+        warpforge::swiglu_unfused_cpu(left.data(), right.data(), intermediate.data(),
+                                      expected.data(), count);
         work = [&](const cudaStream_t launch_stream) {
-            warpforge::swiglu_unfused_cuda(
-                device_left.get(),
-                device_right.get(),
-                device_intermediate.get(),
-                device_output.get(),
-                count,
-                warpforge::elementwise_default_block_size,
-                launch_stream);
+            warpforge::swiglu_unfused_cuda(device_left.get(), device_right.get(),
+                                           device_intermediate.get(), device_output.get(), count,
+                                           warpforge::elementwise_default_block_size,
+                                           launch_stream);
         };
     }
-    const unsigned int grid = static_cast<unsigned int>(
-        (count + warpforge::elementwise_default_block_size - 1U) /
-        warpforge::elementwise_default_block_size);
+    const unsigned int grid =
+        static_cast<unsigned int>((count + warpforge::elementwise_default_block_size - 1U) /
+                                  warpforge::elementwise_default_block_size);
     auto metadata = warpforge::make_benchmark_metadata(
-        operation,
-        implementation,
-        "fp32",
+        operation, implementation, "fp32",
         {{"elements", count}, {"kernel_launches", kernel_launches}},
         {{grid, 1U, 1U}, {warpforge::elementwise_default_block_size, 1U, 1U}, 0U});
-    records.push_back(measure_case(
-        operation + "_" + implementation + ".json",
-        std::move(metadata),
-        options.benchmark,
-        {1.0e-5, 1.0e-5},
-        expected,
-        device_output.get(),
-        logical_arrays * count * sizeof(float),
-        work,
-        stream));
+    records.push_back(measure_case(operation + "_" + implementation + ".json", std::move(metadata),
+                                   options.benchmark, {1.0e-5, 1.0e-5}, expected,
+                                   device_output.get(), logical_arrays * count * sizeof(float),
+                                   work, stream));
 }
 
-void benchmark_causal_mask(
-    const Options& options,
-    const cudaStream_t stream,
-    std::vector<RecordedResult>& records) {
-    const warpforge::CausalMaskProblem problem{
-        1U, options.heads, options.mask_length, options.mask_length, 0U};
+void benchmark_causal_mask(const Options& options, const cudaStream_t stream,
+                           std::vector<RecordedResult>& records) {
+    const warpforge::CausalMaskProblem problem{1U, options.heads, options.mask_length,
+                                               options.mask_length, 0U};
     const std::size_t count = warpforge::causal_mask_element_count(problem);
     const auto input = random_values(count, options.benchmark.seed + 6U, -4.0F, 4.0F);
     std::vector<float> expected(count);
     warpforge::causal_mask_cpu(input.data(), expected.data(), problem);
     LocalDeviceBuffer<float> device_input(count);
     LocalDeviceBuffer<float> device_output(count);
-    CUDA_CHECK(cudaMemcpy(
-        device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-    const unsigned int grid = static_cast<unsigned int>(
-        (count + warpforge::causal_mask_default_block_size - 1U) /
-        warpforge::causal_mask_default_block_size);
+    CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    const unsigned int grid =
+        static_cast<unsigned int>((count + warpforge::causal_mask_default_block_size - 1U) /
+                                  warpforge::causal_mask_default_block_size);
     auto metadata = warpforge::make_benchmark_metadata(
-        "causal_mask",
-        "baseline",
-        "fp32",
+        "causal_mask", "baseline", "fp32",
         {{"batch", problem.batch},
          {"heads", problem.heads},
          {"query_length", problem.query_length},
@@ -494,28 +413,19 @@ void benchmark_causal_mask(
          {"query_position_offset", problem.query_position_offset}},
         {{grid, 1U, 1U}, {warpforge::causal_mask_default_block_size, 1U, 1U}, 0U});
     records.push_back(measure_case(
-        "causal_mask_baseline.json",
-        std::move(metadata),
-        options.benchmark,
-        {0.0, 0.0},
-        expected,
-        device_output.get(),
-        2U * count * sizeof(float),
+        "causal_mask_baseline.json", std::move(metadata), options.benchmark, {0.0, 0.0}, expected,
+        device_output.get(), 2U * count * sizeof(float),
         [&](const cudaStream_t launch_stream) {
-            warpforge::causal_mask_cuda(
-                device_input.get(),
-                device_output.get(),
-                problem,
-                warpforge::causal_mask_default_block_size,
-                launch_stream);
+            warpforge::causal_mask_cuda(device_input.get(), device_output.get(), problem,
+                                        warpforge::causal_mask_default_block_size, launch_stream);
         },
         stream));
 }
 
 void add_speedups(std::vector<RecordedResult>& records) {
     for (auto& record : records) {
-        const auto baseline = std::find_if(
-            records.begin(), records.end(), [&](const RecordedResult& candidate) {
+        const auto baseline =
+            std::find_if(records.begin(), records.end(), [&](const RecordedResult& candidate) {
                 if (candidate.result.metadata.operation != record.result.metadata.operation) {
                     return false;
                 }
@@ -534,9 +444,8 @@ void add_speedups(std::vector<RecordedResult>& records) {
     }
 }
 
-void write_results(
-    const std::filesystem::path& directory,
-    const std::vector<RecordedResult>& records) {
+void write_results(const std::filesystem::path& directory,
+                   const std::vector<RecordedResult>& records) {
     std::filesystem::create_directories(directory);
     for (const auto& record : records) {
         warpforge::write_benchmark_json(record.result, directory / record.filename);
@@ -552,10 +461,8 @@ void write_results(
         const auto& result = record.result;
         summary << result.schema_version << ','
                 << record.filename.substr(0U, record.filename.size() - 5U) << ','
-                << result.metadata.operation << ','
-                << result.metadata.implementation << ','
-                << result.statistics.median_ms << ','
-                << result.statistics.p95_ms << ','
+                << result.metadata.operation << ',' << result.metadata.implementation << ','
+                << result.statistics.median_ms << ',' << result.statistics.p95_ms << ','
                 << result.metrics.at("effective_bandwidth_gbps_from_median") << ','
                 << result.metrics.at("speedup_vs_operation_baseline") << ','
                 << result.validation.max_absolute_error << ','
@@ -564,7 +471,7 @@ void write_results(
     }
 }
 
-}  // namespace
+} // namespace
 
 int main(int argument_count, char** arguments) {
     try {

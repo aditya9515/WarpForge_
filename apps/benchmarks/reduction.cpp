@@ -32,10 +32,8 @@ constexpr std::array<warpforge::ReductionOperation, 2> operations{
 };
 
 constexpr std::array<warpforge::ReductionVariant, 5> variants{
-    warpforge::ReductionVariant::naive_interleaved,
-    warpforge::ReductionVariant::shared_memory,
-    warpforge::ReductionVariant::reduced_divergence,
-    warpforge::ReductionVariant::unrolled,
+    warpforge::ReductionVariant::naive_interleaved,  warpforge::ReductionVariant::shared_memory,
+    warpforge::ReductionVariant::reduced_divergence, warpforge::ReductionVariant::unrolled,
     warpforge::ReductionVariant::warp_shuffle,
 };
 
@@ -55,8 +53,7 @@ struct RecordedResult final {
     warpforge::BenchmarkResult result;
 };
 
-template <typename T>
-using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
+template <typename T> using LocalDeviceBuffer = warpforge::DeviceBuffer<T>;
 
 std::uint64_t parse_unsigned(const std::string& text, const std::string_view option) {
     if (text.empty() || text.front() == '-') {
@@ -174,8 +171,7 @@ void validate_options(const Options& options) {
         static_cast<void>(parse_variant(options.variant));
     }
     if (options.profile_only && (options.operation == "all" || options.variant == "all")) {
-        throw std::invalid_argument(
-            "--profile-only requires one --operation and one --variant");
+        throw std::invalid_argument("--profile-only requires one --operation and one --variant");
     }
 }
 
@@ -193,80 +189,58 @@ std::vector<warpforge::ReductionVariant> selected_variants(const Options& option
     return {parse_variant(options.variant)};
 }
 
-warpforge::ValidationResult validate_result(
-    const warpforge::ReductionOperation operation,
-    const double sum_reference,
-    const float maximum_reference,
-    const float actual,
-    const std::size_t input_count) {
+warpforge::ValidationResult validate_result(const warpforge::ReductionOperation operation,
+                                            const double sum_reference,
+                                            const float maximum_reference, const float actual,
+                                            const std::size_t input_count) {
     if (operation == warpforge::ReductionOperation::sum) {
         return warpforge::validate_reduction_sum(sum_reference, actual, input_count);
     }
-    return warpforge::validate_fp32(
-        &maximum_reference, &actual, 1U, {0.0, 0.0});
+    return warpforge::validate_fp32(&maximum_reference, &actual, 1U, {0.0, 0.0});
 }
 
-double expected_value(
-    const warpforge::ReductionOperation operation,
-    const double sum_reference,
-    const float maximum_reference) {
-    return operation == warpforge::ReductionOperation::sum
-        ? sum_reference
-        : static_cast<double>(maximum_reference);
+double expected_value(const warpforge::ReductionOperation operation, const double sum_reference,
+                      const float maximum_reference) {
+    return operation == warpforge::ReductionOperation::sum ? sum_reference
+                                                           : static_cast<double>(maximum_reference);
 }
 
-RecordedResult run_experiment(
-    const Options& options,
-    const warpforge::ReductionOperation operation,
-    const warpforge::ReductionVariant variant,
-    const float* device_input,
-    const double sum_reference,
-    const float maximum_reference) {
-    const std::size_t workspace_elements = warpforge::reduction_workspace_elements(
-        options.element_count, variant, options.block_size);
+RecordedResult run_experiment(const Options& options, const warpforge::ReductionOperation operation,
+                              const warpforge::ReductionVariant variant, const float* device_input,
+                              const double sum_reference, const float maximum_reference) {
+    const std::size_t workspace_elements =
+        warpforge::reduction_workspace_elements(options.element_count, variant, options.block_size);
     LocalDeviceBuffer<float> workspace_a(workspace_elements);
     LocalDeviceBuffer<float> workspace_b(workspace_elements);
     LocalDeviceBuffer<float> device_output(1U);
 
     const auto launch = [&](cudaStream_t stream) {
-        warpforge::reduce_cuda(
-            device_input,
-            options.element_count,
-            operation,
-            variant,
-            workspace_a.get(),
-            workspace_b.get(),
-            workspace_elements,
-            device_output.get(),
-            options.block_size,
-            stream);
+        warpforge::reduce_cuda(device_input, options.element_count, operation, variant,
+                               workspace_a.get(), workspace_b.get(), workspace_elements,
+                               device_output.get(), options.block_size, stream);
     };
 
     launch(nullptr);
     CUDA_CHECK(cudaDeviceSynchronize());
     float actual = 0.0F;
-    CUDA_CHECK(cudaMemcpy(
-        &actual, device_output.get(), sizeof(float), cudaMemcpyDeviceToHost));
-    const auto validation = validate_result(
-        operation, sum_reference, maximum_reference, actual, options.element_count);
+    CUDA_CHECK(cudaMemcpy(&actual, device_output.get(), sizeof(float), cudaMemcpyDeviceToHost));
+    const auto validation =
+        validate_result(operation, sum_reference, maximum_reference, actual, options.element_count);
     if (!validation.passed) {
-        throw std::runtime_error(
-            std::string(warpforge::reduction_operation_name(operation)) + "/" +
-            warpforge::reduction_variant_name(variant) + " failed validation");
+        throw std::runtime_error(std::string(warpforge::reduction_operation_name(operation)) + "/" +
+                                 warpforge::reduction_variant_name(variant) + " failed validation");
     }
 
-    auto samples = warpforge::measure_cuda_kernel(
-        options.benchmark, nullptr, launch);
+    auto samples = warpforge::measure_cuda_kernel(options.benchmark, nullptr, launch);
     const auto statistics = warpforge::summarize_samples(samples);
-    const std::size_t first_output = warpforge::reduction_output_count(
-        options.element_count, variant, options.block_size);
+    const std::size_t first_output =
+        warpforge::reduction_output_count(options.element_count, variant, options.block_size);
     if (first_output > std::numeric_limits<unsigned int>::max()) {
         throw std::overflow_error("first reduction grid exceeds unsigned int");
     }
 
     warpforge::LaunchConfiguration launch_configuration;
-    launch_configuration.grid = {
-        static_cast<unsigned int>(first_output), 1U, 1U};
+    launch_configuration.grid = {static_cast<unsigned int>(first_output), 1U, 1U};
     launch_configuration.block = {options.block_size, 1U, 1U};
     launch_configuration.dynamic_shared_memory_bytes =
         warpforge::reduction_dynamic_shared_memory_bytes(variant, options.block_size);
@@ -275,8 +249,7 @@ RecordedResult run_experiment(
     result.config = options.benchmark;
     result.metadata = warpforge::make_benchmark_metadata(
         std::string("reduction_") + warpforge::reduction_operation_name(operation),
-        warpforge::reduction_variant_name(variant),
-        "fp32",
+        warpforge::reduction_variant_name(variant), "fp32",
         {{"elements", static_cast<std::uint64_t>(options.element_count)},
          {"passes", static_cast<std::uint64_t>(warpforge::reduction_pass_count(
                         options.element_count, variant, options.block_size))},
@@ -285,14 +258,12 @@ RecordedResult run_experiment(
     result.statistics = statistics;
     result.validation = validation;
     result.metrics["absolute_error"] = validation.max_absolute_error;
-    result.metrics["cpu_reference"] =
-        expected_value(operation, sum_reference, maximum_reference);
+    result.metrics["cpu_reference"] = expected_value(operation, sum_reference, maximum_reference);
     result.metrics["gpu_result"] = static_cast<double>(actual);
     result.metrics["elements_per_second_from_median"] =
         static_cast<double>(options.element_count) / (statistics.median_ms * 1.0e-3);
     result.metrics["effective_input_bandwidth_gbps_from_median"] =
-        static_cast<double>(options.element_count * sizeof(float)) /
-        (statistics.median_ms * 1.0e6);
+        static_cast<double>(options.element_count * sizeof(float)) / (statistics.median_ms * 1.0e6);
     if (operation == warpforge::ReductionOperation::sum) {
         const auto tolerance = warpforge::reduction_sum_tolerance(options.element_count);
         result.metrics["absolute_tolerance"] = tolerance.absolute;
@@ -300,21 +271,18 @@ RecordedResult run_experiment(
     }
     result.samples_ms = std::move(samples);
 
-    const std::string filename =
-        std::string(warpforge::reduction_operation_name(operation)) + "_" +
-        warpforge::reduction_variant_name(variant);
+    const std::string filename = std::string(warpforge::reduction_operation_name(operation)) + "_" +
+                                 warpforge::reduction_variant_name(variant);
     return {filename, std::move(result)};
 }
 
-void add_speedups_and_write(
-    const Options& options,
-    std::vector<RecordedResult>& records) {
+void add_speedups_and_write(const Options& options, std::vector<RecordedResult>& records) {
     for (const auto operation : selected_operations(options)) {
         const std::string operation_name = warpforge::reduction_operation_name(operation);
-        const auto baseline = std::find_if(
-            records.begin(), records.end(), [&](const RecordedResult& record) {
+        const auto baseline =
+            std::find_if(records.begin(), records.end(), [&](const RecordedResult& record) {
                 return record.result.metadata.operation == "reduction_" + operation_name &&
-                    record.result.metadata.implementation == "naive_interleaved";
+                       record.result.metadata.implementation == "naive_interleaved";
             });
         if (baseline == records.end()) {
             continue;
@@ -330,8 +298,8 @@ void add_speedups_and_write(
 
     std::filesystem::create_directories(options.output_directory);
     for (const auto& record : records) {
-        warpforge::write_benchmark_json(
-            record.result, options.output_directory / (record.filename + ".json"));
+        warpforge::write_benchmark_json(record.result,
+                                        options.output_directory / (record.filename + ".json"));
     }
 
     std::ofstream summary(options.output_directory / "summary.csv", std::ios::trunc);
@@ -345,9 +313,8 @@ void add_speedups_and_write(
     for (const auto& record : records) {
         const auto speedup = record.result.metrics.find("speedup_vs_naive_interleaved");
         summary << record.result.schema_version << ',' << record.filename << ','
-                << record.result.metadata.operation << ','
-                << record.result.metadata.implementation << ','
-                << record.result.statistics.median_ms << ','
+                << record.result.metadata.operation << ',' << record.result.metadata.implementation
+                << ',' << record.result.statistics.median_ms << ','
                 << record.result.statistics.p95_ms << ','
                 << record.result.metrics.at("elements_per_second_from_median") << ','
                 << record.result.metrics.at("effective_input_bandwidth_gbps_from_median") << ','
@@ -359,25 +326,23 @@ void add_speedups_and_write(
 }
 
 void print_results(const std::vector<RecordedResult>& records) {
-    std::cout << std::left << std::setw(34) << "Experiment" << std::right
-              << std::setw(13) << "Median ms" << std::setw(13) << "P95 ms"
-              << std::setw(13) << "GB/s" << std::setw(11) << "Speedup" << '\n';
+    std::cout << std::left << std::setw(34) << "Experiment" << std::right << std::setw(13)
+              << "Median ms" << std::setw(13) << "P95 ms" << std::setw(13) << "GB/s"
+              << std::setw(11) << "Speedup" << '\n';
     std::cout << std::string(84, '-') << '\n';
     std::cout << std::fixed << std::setprecision(4);
     for (const auto& record : records) {
         const auto speedup = record.result.metrics.find("speedup_vs_naive_interleaved");
-        std::cout << std::left << std::setw(34) << record.filename << std::right
-                  << std::setw(13) << record.result.statistics.median_ms
-                  << std::setw(13) << record.result.statistics.p95_ms
-                  << std::setw(13)
+        std::cout << std::left << std::setw(34) << record.filename << std::right << std::setw(13)
+                  << record.result.statistics.median_ms << std::setw(13)
+                  << record.result.statistics.p95_ms << std::setw(13)
                   << record.result.metrics.at("effective_input_bandwidth_gbps_from_median")
                   << std::setw(11)
-                  << (speedup == record.result.metrics.end() ? 0.0 : speedup->second)
-                  << '\n';
+                  << (speedup == record.result.metrics.end() ? 0.0 : speedup->second) << '\n';
     }
 }
 
-}  // namespace
+} // namespace
 
 int main(const int argument_count, char** arguments) {
     try {
@@ -395,61 +360,39 @@ int main(const int argument_count, char** arguments) {
             value = distribution(generator);
         }
         input[options.element_count / 2U] = 7.25F;
-        const double sum_reference =
-            warpforge::reduction_sum_cpu(input.data(), input.size());
-        const float maximum_reference =
-            warpforge::reduction_max_cpu(input.data(), input.size());
+        const double sum_reference = warpforge::reduction_sum_cpu(input.data(), input.size());
+        const float maximum_reference = warpforge::reduction_max_cpu(input.data(), input.size());
 
         LocalDeviceBuffer<float> device_input(options.element_count);
-        CUDA_CHECK(cudaMemcpy(
-            device_input.get(),
-            input.data(),
-            options.element_count * sizeof(float),
-            cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(),
+                              options.element_count * sizeof(float), cudaMemcpyHostToDevice));
 
         std::vector<RecordedResult> records;
         for (const auto operation : selected_operations(options)) {
             for (const auto variant : selected_variants(options)) {
                 if (options.profile_only) {
-                    const std::size_t workspace_elements =
-                        warpforge::reduction_workspace_elements(
-                            options.element_count, variant, options.block_size);
+                    const std::size_t workspace_elements = warpforge::reduction_workspace_elements(
+                        options.element_count, variant, options.block_size);
                     LocalDeviceBuffer<float> workspace_a(workspace_elements);
                     LocalDeviceBuffer<float> workspace_b(workspace_elements);
                     LocalDeviceBuffer<float> output(1U);
-                    warpforge::reduce_cuda(
-                        device_input.get(),
-                        options.element_count,
-                        operation,
-                        variant,
-                        workspace_a.get(),
-                        workspace_b.get(),
-                        workspace_elements,
-                        output.get(),
-                        options.block_size);
+                    warpforge::reduce_cuda(device_input.get(), options.element_count, operation,
+                                           variant, workspace_a.get(), workspace_b.get(),
+                                           workspace_elements, output.get(), options.block_size);
                     CUDA_CHECK(cudaDeviceSynchronize());
                     float actual = 0.0F;
-                    CUDA_CHECK(cudaMemcpy(
-                        &actual, output.get(), sizeof(float), cudaMemcpyDeviceToHost));
+                    CUDA_CHECK(
+                        cudaMemcpy(&actual, output.get(), sizeof(float), cudaMemcpyDeviceToHost));
                     const auto validation = validate_result(
-                        operation,
-                        sum_reference,
-                        maximum_reference,
-                        actual,
-                        options.element_count);
+                        operation, sum_reference, maximum_reference, actual, options.element_count);
                     if (!validation.passed) {
                         throw std::runtime_error("profile-only reduction failed validation");
                     }
                     std::cout << "Profile reduction validation: PASS\n";
                     return EXIT_SUCCESS;
                 }
-                records.push_back(run_experiment(
-                    options,
-                    operation,
-                    variant,
-                    device_input.get(),
-                    sum_reference,
-                    maximum_reference));
+                records.push_back(run_experiment(options, operation, variant, device_input.get(),
+                                                 sum_reference, maximum_reference));
             }
         }
 

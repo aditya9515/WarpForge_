@@ -45,22 +45,12 @@ jobs:
       - name: Verify committed measured-results plot
         run: python scripts/plot_benchmarks.py --check
 
-  format-audit:
-    name: Produce clang-format 18 audit patch
+  format:
+    name: Check C++/CUDA formatting
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Format a disposable checkout with the preinstalled tool
-        shell: bash
-        run: |
-          clang-format-18 --version
-          git ls-files -z -- '*.cpp' '*.cu' '*.cuh' '*.hpp' '*.h' | xargs -0 -r clang-format-18 -i
-          mkdir -p out/format-audit
-          git diff --binary > out/format-audit/clang-format.patch
-          git diff --stat
-      - name: Upload mechanical formatting patch
-        uses: actions/upload-artifact@v7
-        with:
-          name: clang-format-18-patch
-          path: out/format-audit/clang-format.patch
-          if-no-files-found: error
+      - name: Check preinstalled clang-format 18 version
+        run: clang-format-18 --version
+      - name: Verify every tracked C++ and CUDA source
+        run: python3 scripts/check_format.py --formatter clang-format-18

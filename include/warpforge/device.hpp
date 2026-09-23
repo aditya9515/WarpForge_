@@ -36,4 +36,4 @@ struct DeviceInfo final {
 [[nodiscard]] int device_count();
 [[nodiscard]] DeviceInfo query_device(int device_index);
 
-}  // namespace warpforge
+} // namespace warpforge

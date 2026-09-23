@@ -48,34 +48,34 @@ std::string escape_json(const std::string& value) {
     std::ostringstream output;
     for (const unsigned char character : value) {
         switch (character) {
-            case '"':
-                output << "\\\"";
-                break;
-            case '\\':
-                output << "\\\\";
-                break;
-            case '\b':
-                output << "\\b";
-                break;
-            case '\f':
-                output << "\\f";
-                break;
-            case '\n':
-                output << "\\n";
-                break;
-            case '\r':
-                output << "\\r";
-                break;
-            case '\t':
-                output << "\\t";
-                break;
-            default:
-                if (character < 0x20U) {
-                    output << "\\u" << std::hex << std::setw(4) << std::setfill('0')
-                           << static_cast<int>(character) << std::dec << std::setfill(' ');
-                } else {
-                    output << static_cast<char>(character);
-                }
+        case '"':
+            output << "\\\"";
+            break;
+        case '\\':
+            output << "\\\\";
+            break;
+        case '\b':
+            output << "\\b";
+            break;
+        case '\f':
+            output << "\\f";
+            break;
+        case '\n':
+            output << "\\n";
+            break;
+        case '\r':
+            output << "\\r";
+            break;
+        case '\t':
+            output << "\\t";
+            break;
+        default:
+            if (character < 0x20U) {
+                output << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+                       << static_cast<int>(character) << std::dec << std::setfill(' ');
+            } else {
+                output << static_cast<char>(character);
+            }
         }
     }
     return output.str();
@@ -89,9 +89,8 @@ void write_number(std::ostream& output, const double value) {
     }
 }
 
-void write_dimensions(
-    std::ostream& output,
-    const std::map<std::string, std::uint64_t>& dimensions) {
+void write_dimensions(std::ostream& output,
+                      const std::map<std::string, std::uint64_t>& dimensions) {
     output << "{";
     bool first = true;
     for (const auto& [name, value] : dimensions) {
@@ -124,15 +123,13 @@ void write_metrics(std::ostream& output, const std::map<std::string, double>& me
     output << '}';
 }
 
-}  // namespace
+} // namespace
 
-BenchmarkMetadata make_benchmark_metadata(
-    std::string operation,
-    std::string implementation,
-    std::string data_type,
-    std::map<std::string, std::uint64_t> dimensions,
-    const LaunchConfiguration launch,
-    const int device_index) {
+BenchmarkMetadata make_benchmark_metadata(std::string operation, std::string implementation,
+                                          std::string data_type,
+                                          std::map<std::string, std::uint64_t> dimensions,
+                                          const LaunchConfiguration launch,
+                                          const int device_index) {
     const DeviceInfo device = query_device(device_index);
     const CudaVersions versions = query_cuda_versions();
 
@@ -155,9 +152,7 @@ BenchmarkMetadata make_benchmark_metadata(
     return metadata;
 }
 
-void write_benchmark_json(
-    const BenchmarkResult& result,
-    const std::filesystem::path& output_path) {
+void write_benchmark_json(const BenchmarkResult& result, const std::filesystem::path& output_path) {
     if (output_path.empty()) {
         throw std::invalid_argument("benchmark output path must not be empty");
     }
@@ -190,8 +185,8 @@ void write_benchmark_json(
            << launch.grid[2] << "],\n";
     output << "      \"block\": [" << launch.block[0] << ", " << launch.block[1] << ", "
            << launch.block[2] << "],\n";
-    output << "      \"dynamic_shared_memory_bytes\": "
-           << launch.dynamic_shared_memory_bytes << "\n";
+    output << "      \"dynamic_shared_memory_bytes\": " << launch.dynamic_shared_memory_bytes
+           << "\n";
     output << "    },\n";
     output << "    \"gpu_name\": \"" << escape_json(metadata.gpu_name) << "\",\n";
     output << "    \"compute_capability\": \"" << metadata.compute_capability_major << '.'
@@ -258,4 +253,4 @@ void write_benchmark_json(
     }
 }
 
-}  // namespace warpforge
+} // namespace warpforge

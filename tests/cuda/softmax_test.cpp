@@ -17,7 +17,7 @@
 namespace {
 
 class DeviceBuffer final {
-public:
+  public:
     explicit DeviceBuffer(const std::size_t count) {
         if (count > 0U) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
@@ -30,16 +30,15 @@ public:
     }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
-    [[nodiscard]] float* get() const noexcept { return pointer_; }
+    [[nodiscard]] float* get() const noexcept {
+        return pointer_;
+    }
 
-private:
+  private:
     float* pointer_{};
 };
 
-void run_case(
-    const std::size_t rows,
-    const std::size_t columns,
-    const bool extreme = false) {
+void run_case(const std::size_t rows, const std::size_t columns, const bool extreme = false) {
     const std::size_t count = rows * columns;
     std::vector<float> input(count);
     std::mt19937 generator(2027U + static_cast<unsigned int>(rows * 17U + columns));
@@ -61,8 +60,8 @@ void run_case(
     DeviceBuffer device_input(count);
     DeviceBuffer device_output(count);
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
     }
     constexpr std::array variants{
         warpforge::SoftmaxVariant::naive,
@@ -70,22 +69,18 @@ void run_case(
         warpforge::SoftmaxVariant::warp,
     };
     for (const auto variant : variants) {
-        warpforge::softmax_cuda(
-            device_input.get(), device_output.get(), rows, columns, variant);
+        warpforge::softmax_cuda(device_input.get(), device_output.get(), rows, columns, variant);
         CUDA_CHECK(cudaDeviceSynchronize());
         if (count > 0U) {
-            CUDA_CHECK(cudaMemcpy(
-                actual.data(),
-                device_output.get(),
-                count * sizeof(float),
-                cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), count * sizeof(float),
+                                  cudaMemcpyDeviceToHost));
         }
-        const auto validation = warpforge::validate_fp32(
-            expected.data(), actual.data(), count, {1.0e-5, 1.0e-5});
+        const auto validation =
+            warpforge::validate_fp32(expected.data(), actual.data(), count, {1.0e-5, 1.0e-5});
         if (!validation.passed) {
-            throw std::runtime_error(
-                std::string(warpforge::softmax_variant_name(variant)) +
-                " softmax failed at index " + std::to_string(validation.worst_index));
+            throw std::runtime_error(std::string(warpforge::softmax_variant_name(variant)) +
+                                     " softmax failed at index " +
+                                     std::to_string(validation.worst_index));
         }
         for (std::size_t row = 0U; row < rows; ++row) {
             double sum = 0.0;
@@ -114,13 +109,13 @@ void test_in_place() {
     std::vector<float> actual(input.size());
     warpforge::softmax_cpu(input.data(), expected.data(), rows, columns);
     DeviceBuffer values(input.size());
-    CUDA_CHECK(cudaMemcpy(
-        values.get(), input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice));
-    warpforge::softmax_cuda(
-        values.get(), values.get(), rows, columns, warpforge::SoftmaxVariant::warp);
+    CUDA_CHECK(cudaMemcpy(values.get(), input.data(), input.size() * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    warpforge::softmax_cuda(values.get(), values.get(), rows, columns,
+                            warpforge::SoftmaxVariant::warp);
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(), values.get(), actual.size() * sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(actual.data(), values.get(), actual.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     if (!warpforge::validate_fp32(expected.data(), actual.data(), actual.size()).passed) {
         throw std::runtime_error("in-place softmax failed");
     }
@@ -128,12 +123,11 @@ void test_in_place() {
 
 void test_invalid_arguments() {
     warpforge::softmax_cpu(nullptr, nullptr, 0U, 17U);
-    warpforge::softmax_cuda(
-        nullptr, nullptr, 4U, 0U, warpforge::SoftmaxVariant::warp);
+    warpforge::softmax_cuda(nullptr, nullptr, 4U, 0U, warpforge::SoftmaxVariant::warp);
     bool invalid_block = false;
     try {
-        static_cast<void>(warpforge::softmax_dynamic_shared_memory_bytes(
-            warpforge::SoftmaxVariant::block, 48U));
+        static_cast<void>(
+            warpforge::softmax_dynamic_shared_memory_bytes(warpforge::SoftmaxVariant::block, 48U));
     } catch (const std::invalid_argument&) {
         invalid_block = true;
     }
@@ -142,17 +136,14 @@ void test_invalid_arguments() {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
         constexpr std::array shapes{
-            std::array<std::size_t, 2>{1U, 1U},
-            std::array<std::size_t, 2>{2U, 17U},
-            std::array<std::size_t, 2>{3U, 31U},
-            std::array<std::size_t, 2>{3U, 32U},
-            std::array<std::size_t, 2>{3U, 33U},
-            std::array<std::size_t, 2>{4U, 257U},
+            std::array<std::size_t, 2>{1U, 1U},    std::array<std::size_t, 2>{2U, 17U},
+            std::array<std::size_t, 2>{3U, 31U},   std::array<std::size_t, 2>{3U, 32U},
+            std::array<std::size_t, 2>{3U, 33U},   std::array<std::size_t, 2>{4U, 257U},
             std::array<std::size_t, 2>{7U, 1003U},
         };
         for (const auto& shape : shapes) {

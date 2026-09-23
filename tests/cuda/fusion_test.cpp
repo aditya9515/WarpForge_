@@ -20,7 +20,7 @@
 namespace {
 
 class DeviceBuffer final {
-public:
+  public:
     explicit DeviceBuffer(const std::size_t count) {
         if (count > 0U) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
@@ -33,18 +33,19 @@ public:
     }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
-    [[nodiscard]] float* get() const noexcept { return pointer_; }
+    [[nodiscard]] float* get() const noexcept {
+        return pointer_;
+    }
 
-private:
+  private:
     float* pointer_{};
 };
 
 class PinnedBuffer final {
-public:
+  public:
     explicit PinnedBuffer(const std::size_t count) : count_(count) {
         if (count > 0U) {
-            CUDA_CHECK(cudaMallocHost(
-                reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
+            CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
         }
     }
     ~PinnedBuffer() noexcept {
@@ -54,20 +55,26 @@ public:
     }
     PinnedBuffer(const PinnedBuffer&) = delete;
     PinnedBuffer& operator=(const PinnedBuffer&) = delete;
-    [[nodiscard]] float* get() const noexcept { return pointer_; }
-    [[nodiscard]] std::size_t size() const noexcept { return count_; }
+    [[nodiscard]] float* get() const noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] std::size_t size() const noexcept {
+        return count_;
+    }
     [[nodiscard]] float& operator[](const std::size_t index) noexcept {
         return pointer_[index];
     }
 
-private:
+  private:
     float* pointer_{};
     std::size_t count_{};
 };
 
 class Stream final {
-public:
-    Stream() { CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking)); }
+  public:
+    Stream() {
+        CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
+    }
     ~Stream() noexcept {
         if (stream_ != nullptr) {
             cudaStreamDestroy(stream_);
@@ -75,15 +82,19 @@ public:
     }
     Stream(const Stream&) = delete;
     Stream& operator=(const Stream&) = delete;
-    [[nodiscard]] cudaStream_t get() const noexcept { return stream_; }
+    [[nodiscard]] cudaStream_t get() const noexcept {
+        return stream_;
+    }
 
-private:
+  private:
     cudaStream_t stream_{};
 };
 
 class Event final {
-public:
-    Event() { CUDA_CHECK(cudaEventCreateWithFlags(&event_, cudaEventDisableTiming)); }
+  public:
+    Event() {
+        CUDA_CHECK(cudaEventCreateWithFlags(&event_, cudaEventDisableTiming));
+    }
     ~Event() noexcept {
         if (event_ != nullptr) {
             cudaEventDestroy(event_);
@@ -91,31 +102,28 @@ public:
     }
     Event(const Event&) = delete;
     Event& operator=(const Event&) = delete;
-    [[nodiscard]] cudaEvent_t get() const noexcept { return event_; }
+    [[nodiscard]] cudaEvent_t get() const noexcept {
+        return event_;
+    }
 
-private:
+  private:
     cudaEvent_t event_{};
 };
 
-void require_valid(
-    const std::vector<float>& expected,
-    const std::vector<float>& actual,
-    const warpforge::Tolerance tolerance,
-    const std::string& label) {
-    const auto validation = warpforge::validate_fp32(
-        expected.data(), actual.data(), expected.size(), tolerance);
+void require_valid(const std::vector<float>& expected, const std::vector<float>& actual,
+                   const warpforge::Tolerance tolerance, const std::string& label) {
+    const auto validation =
+        warpforge::validate_fp32(expected.data(), actual.data(), expected.size(), tolerance);
     if (!validation.passed) {
-        throw std::runtime_error(
-            label + " failed at index " + std::to_string(validation.worst_index) +
-            " with max error " + std::to_string(validation.max_absolute_error));
+        throw std::runtime_error(label + " failed at index " +
+                                 std::to_string(validation.worst_index) + " with max error " +
+                                 std::to_string(validation.max_absolute_error));
     }
 }
 
-void run_residual_rmsnorm_case(
-    const std::size_t rows,
-    const std::size_t columns,
-    const bool output_aliases_input = false,
-    const bool output_aliases_residual = false) {
+void run_residual_rmsnorm_case(const std::size_t rows, const std::size_t columns,
+                               const bool output_aliases_input = false,
+                               const bool output_aliases_residual = false) {
     const std::size_t count = rows * columns;
     std::mt19937 generator(2027U + static_cast<unsigned int>(rows + columns));
     std::uniform_real_distribution<float> value_distribution(-3.0F, 3.0F);
@@ -135,67 +143,50 @@ void run_residual_rmsnorm_case(
     std::vector<float> expected(count);
     std::vector<float> actual(count);
     constexpr float epsilon = 1.0e-5F;
-    warpforge::residual_rmsnorm_cpu(
-        input.data(), residual.data(), weight.data(), expected.data(), rows, columns, epsilon);
+    warpforge::residual_rmsnorm_cpu(input.data(), residual.data(), weight.data(), expected.data(),
+                                    rows, columns, epsilon);
 
     DeviceBuffer device_input(count);
     DeviceBuffer device_residual(count);
     DeviceBuffer device_weight(columns);
     DeviceBuffer device_intermediate(count);
-    DeviceBuffer device_output(
-        output_aliases_input || output_aliases_residual ? 0U : count);
+    DeviceBuffer device_output(output_aliases_input || output_aliases_residual ? 0U : count);
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(
-            device_residual.get(), residual.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(
-            device_weight.get(), weight.data(), columns * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_residual.get(), residual.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_weight.get(), weight.data(), columns * sizeof(float),
+                              cudaMemcpyHostToDevice));
     }
     float* output = output_aliases_input
-        ? device_input.get()
-        : (output_aliases_residual ? device_residual.get() : device_output.get());
-    warpforge::residual_rmsnorm_fused_cuda(
-        device_input.get(),
-        device_residual.get(),
-        device_weight.get(),
-        output,
-        rows,
-        columns,
-        epsilon);
+                        ? device_input.get()
+                        : (output_aliases_residual ? device_residual.get() : device_output.get());
+    warpforge::residual_rmsnorm_fused_cuda(device_input.get(), device_residual.get(),
+                                           device_weight.get(), output, rows, columns, epsilon);
     CUDA_CHECK(cudaDeviceSynchronize());
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(
+            cudaMemcpy(actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
     }
-    require_valid(
-        expected, actual, warpforge::rmsnorm_tolerance(columns),
-        "fused residual RMSNorm");
+    require_valid(expected, actual, warpforge::rmsnorm_tolerance(columns),
+                  "fused residual RMSNorm");
 
     if (!output_aliases_input && !output_aliases_residual && count > 0U) {
-        warpforge::add_cuda(
-            device_input.get(), device_residual.get(), device_intermediate.get(), count);
-        warpforge::rmsnorm_cuda(
-            device_intermediate.get(),
-            device_weight.get(),
-            device_output.get(),
-            rows,
-            columns,
-            epsilon,
-            warpforge::RmsNormVariant::block);
+        warpforge::add_cuda(device_input.get(), device_residual.get(), device_intermediate.get(),
+                            count);
+        warpforge::rmsnorm_cuda(device_intermediate.get(), device_weight.get(), device_output.get(),
+                                rows, columns, epsilon, warpforge::RmsNormVariant::block);
         CUDA_CHECK(cudaDeviceSynchronize());
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(), device_output.get(), count * sizeof(float), cudaMemcpyDeviceToHost));
-        require_valid(
-            expected, actual, warpforge::rmsnorm_tolerance(columns),
-            "separate residual plus RMSNorm");
+        CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), count * sizeof(float),
+                              cudaMemcpyDeviceToHost));
+        require_valid(expected, actual, warpforge::rmsnorm_tolerance(columns),
+                      "separate residual plus RMSNorm");
     }
 }
 
-void run_swiglu_case(
-    const std::size_t count,
-    const bool output_aliases_gate = false,
-    const bool output_aliases_up = false) {
+void run_swiglu_case(const std::size_t count, const bool output_aliases_gate = false,
+                     const bool output_aliases_up = false) {
     std::mt19937 generator(2027U + static_cast<unsigned int>(count));
     std::uniform_real_distribution<float> distribution(-5.0F, 5.0F);
     std::vector<float> gate(count);
@@ -215,32 +206,28 @@ void run_swiglu_case(
     DeviceBuffer device_intermediate(count);
     DeviceBuffer device_output(output_aliases_gate || output_aliases_up ? 0U : count);
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            device_gate.get(), gate.data(), count * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(
-            device_up.get(), up.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_gate.get(), gate.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(
+            cudaMemcpy(device_up.get(), up.data(), count * sizeof(float), cudaMemcpyHostToDevice));
     }
     float* output = output_aliases_gate
-        ? device_gate.get()
-        : (output_aliases_up ? device_up.get() : device_output.get());
+                        ? device_gate.get()
+                        : (output_aliases_up ? device_up.get() : device_output.get());
     warpforge::swiglu_fused_cuda(device_gate.get(), device_up.get(), output, count);
     CUDA_CHECK(cudaDeviceSynchronize());
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(
+            cudaMemcpy(actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
     }
     require_valid(expected, actual, {1.0e-5, 1.0e-5}, "fused SwiGLU");
 
     if (!output_aliases_gate && !output_aliases_up && count > 0U) {
-        warpforge::swiglu_unfused_cuda(
-            device_gate.get(),
-            device_up.get(),
-            device_intermediate.get(),
-            device_output.get(),
-            count);
+        warpforge::swiglu_unfused_cuda(device_gate.get(), device_up.get(),
+                                       device_intermediate.get(), device_output.get(), count);
         CUDA_CHECK(cudaDeviceSynchronize());
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(), device_output.get(), count * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), count * sizeof(float),
+                              cudaMemcpyDeviceToHost));
         require_valid(expected, actual, {1.0e-5, 1.0e-5}, "unfused SwiGLU");
     }
 }
@@ -254,26 +241,22 @@ void test_extreme_swiglu() {
     DeviceBuffer device_gate(gate.size());
     DeviceBuffer device_up(up.size());
     DeviceBuffer device_output(gate.size());
-    CUDA_CHECK(cudaMemcpy(
-        device_gate.get(), gate.data(), gate.size() * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(
-        device_up.get(), up.data(), up.size() * sizeof(float), cudaMemcpyHostToDevice));
-    warpforge::swiglu_fused_cuda(
-        device_gate.get(), device_up.get(), device_output.get(), gate.size());
+    CUDA_CHECK(cudaMemcpy(device_gate.get(), gate.data(), gate.size() * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(
+        cudaMemcpy(device_up.get(), up.data(), up.size() * sizeof(float), cudaMemcpyHostToDevice));
+    warpforge::swiglu_fused_cuda(device_gate.get(), device_up.get(), device_output.get(),
+                                 gate.size());
     CUDA_CHECK(cudaDeviceSynchronize());
-    CUDA_CHECK(cudaMemcpy(
-        actual.data(),
-        device_output.get(),
-        actual.size() * sizeof(float),
-        cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), actual.size() * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     require_valid(expected, actual, {1.0e-5, 1.0e-5}, "extreme fused SwiGLU");
 }
 
 void test_two_stream_pipeline_ordering() {
     constexpr std::size_t element_count = 1003U;
     constexpr std::size_t chunk_count = 5U;
-    constexpr std::size_t chunk_capacity =
-        (element_count + chunk_count - 1U) / chunk_count;
+    constexpr std::size_t chunk_capacity = (element_count + chunk_count - 1U) / chunk_count;
     PinnedBuffer input(element_count);
     PinnedBuffer output(element_count);
     std::vector<float> expected(element_count);
@@ -284,32 +267,23 @@ void test_two_stream_pipeline_ordering() {
 
     std::array<Stream, 2> streams{};
     std::array<Event, 2> completion_events{};
-    std::array<DeviceBuffer, 2> buffers{
-        DeviceBuffer{chunk_capacity}, DeviceBuffer{chunk_capacity}};
+    std::array<DeviceBuffer, 2> buffers{DeviceBuffer{chunk_capacity}, DeviceBuffer{chunk_capacity}};
     for (std::size_t chunk = 0U; chunk < chunk_count; ++chunk) {
         const std::size_t stream_index = chunk % streams.size();
         const std::size_t offset = chunk * chunk_capacity;
         const std::size_t count = std::min(chunk_capacity, element_count - offset);
         const std::size_t bytes = count * sizeof(float);
         const cudaStream_t stream = streams[stream_index].get();
-        CUDA_CHECK(cudaMemcpyAsync(
-            buffers[stream_index].get(),
-            input.get() + offset,
-            bytes,
-            cudaMemcpyHostToDevice,
-            stream));
-        warpforge::silu_cuda(
-            buffers[stream_index].get(), buffers[stream_index].get(), count, 256U, stream);
-        CUDA_CHECK(cudaMemcpyAsync(
-            output.get() + offset,
-            buffers[stream_index].get(),
-            bytes,
-            cudaMemcpyDeviceToHost,
-            stream));
+        CUDA_CHECK(cudaMemcpyAsync(buffers[stream_index].get(), input.get() + offset, bytes,
+                                   cudaMemcpyHostToDevice, stream));
+        warpforge::silu_cuda(buffers[stream_index].get(), buffers[stream_index].get(), count, 256U,
+                             stream);
+        CUDA_CHECK(cudaMemcpyAsync(output.get() + offset, buffers[stream_index].get(), bytes,
+                                   cudaMemcpyDeviceToHost, stream));
     }
     for (std::size_t stream_index = 0U; stream_index < streams.size(); ++stream_index) {
-        CUDA_CHECK(cudaEventRecord(
-            completion_events[stream_index].get(), streams[stream_index].get()));
+        CUDA_CHECK(
+            cudaEventRecord(completion_events[stream_index].get(), streams[stream_index].get()));
     }
     for (const Event& event : completion_events) {
         CUDA_CHECK(cudaEventSynchronize(event.get()));
@@ -333,8 +307,7 @@ void test_invalid_arguments() {
     bool invalid_weight_alias = false;
     try {
         float value = 1.0F;
-        warpforge::residual_rmsnorm_cpu(
-            &value, &value, &value, &value, 1U, 1U, 1.0e-5F);
+        warpforge::residual_rmsnorm_cpu(&value, &value, &value, &value, 1U, 1U, 1.0e-5F);
     } catch (const std::invalid_argument&) {
         invalid_weight_alias = true;
     }
@@ -353,21 +326,19 @@ void test_invalid_arguments() {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
-        constexpr std::array<std::array<std::size_t, 2>, 7> shapes{{
-            {0U, 0U}, {1U, 1U}, {3U, 17U}, {2U, 31U},
-            {4U, 32U}, {3U, 33U}, {37U, 53U}}};
+        constexpr std::array<std::array<std::size_t, 2>, 7> shapes{
+            {{0U, 0U}, {1U, 1U}, {3U, 17U}, {2U, 31U}, {4U, 32U}, {3U, 33U}, {37U, 53U}}};
         for (const auto& shape : shapes) {
             run_residual_rmsnorm_case(shape[0], shape[1]);
         }
         run_residual_rmsnorm_case(3U, 33U, true, false);
         run_residual_rmsnorm_case(3U, 33U, false, true);
 
-        constexpr std::array<std::size_t, 8> sizes{
-            0U, 1U, 17U, 31U, 32U, 33U, 1003U, 1U << 20U};
+        constexpr std::array<std::size_t, 8> sizes{0U, 1U, 17U, 31U, 32U, 33U, 1003U, 1U << 20U};
         for (const std::size_t size : sizes) {
             run_swiglu_case(size);
         }

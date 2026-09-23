@@ -17,7 +17,7 @@
 namespace {
 
 class DeviceBuffer final {
-public:
+  public:
     explicit DeviceBuffer(const std::size_t count) {
         if (count > 0U) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(float)));
@@ -30,20 +30,20 @@ public:
     }
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
-    [[nodiscard]] float* get() const noexcept { return pointer_; }
+    [[nodiscard]] float* get() const noexcept {
+        return pointer_;
+    }
 
-private:
+  private:
     float* pointer_{};
 };
 
-void run_case(
-    const warpforge::RopeProblem& problem,
-    const bool in_place = false,
-    const warpforge::Tolerance tolerance = {1.0e-5, 1.0e-5}) {
+void run_case(const warpforge::RopeProblem& problem, const bool in_place = false,
+              const warpforge::Tolerance tolerance = {1.0e-5, 1.0e-5}) {
     const std::size_t count = warpforge::rope_element_count(problem);
     std::vector<float> input(count);
-    std::mt19937 generator(
-        2027U + static_cast<unsigned int>(problem.sequence + problem.head_dimension));
+    std::mt19937 generator(2027U +
+                           static_cast<unsigned int>(problem.sequence + problem.head_dimension));
     std::uniform_real_distribution<float> distribution(-2.0F, 2.0F);
     for (float& value : input) {
         value = distribution(generator);
@@ -54,22 +54,22 @@ void run_case(
     DeviceBuffer device_input(count);
     DeviceBuffer device_output(in_place ? 0U : count);
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            device_input.get(), input.data(), count * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), count * sizeof(float),
+                              cudaMemcpyHostToDevice));
     }
     float* output = in_place ? device_input.get() : device_output.get();
     warpforge::rope_cuda(device_input.get(), output, problem);
     CUDA_CHECK(cudaDeviceSynchronize());
     if (count > 0U) {
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(
+            cudaMemcpy(actual.data(), output, count * sizeof(float), cudaMemcpyDeviceToHost));
     }
     const auto validation =
         warpforge::validate_fp32(expected.data(), actual.data(), count, tolerance);
     if (!validation.passed) {
-        throw std::runtime_error(
-            "RoPE failed at index " + std::to_string(validation.worst_index) +
-            " with max error " + std::to_string(validation.max_absolute_error));
+        throw std::runtime_error("RoPE failed at index " + std::to_string(validation.worst_index) +
+                                 " with max error " +
+                                 std::to_string(validation.max_absolute_error));
     }
 }
 
@@ -78,8 +78,7 @@ void test_position_layout() {
     const std::vector<float> input{1.0F, 0.0F, 1.0F, 0.0F};
     std::vector<float> output(input.size());
     warpforge::rope_cpu(input.data(), output.data(), problem);
-    if (output[0] != 1.0F || output[1] != 0.0F ||
-        std::abs(output[2] - std::cos(1.0F)) > 1.0e-6F ||
+    if (output[0] != 1.0F || output[1] != 0.0F || std::abs(output[2] - std::cos(1.0F)) > 1.0e-6F ||
         std::abs(output[3] - std::sin(1.0F)) > 1.0e-6F) {
         throw std::runtime_error("RoPE sequence-position layout is incorrect");
     }
@@ -107,7 +106,7 @@ void test_invalid_arguments() {
     warpforge::rope_cpu(nullptr, nullptr, {0U, 7U, 8U, 64U, 0U, 10000.0F});
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {

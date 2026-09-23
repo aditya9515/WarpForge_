@@ -16,16 +16,13 @@ __device__ __forceinline__ float negative_infinity() {
 }
 
 void validate_block_size(const unsigned int block_size) {
-    if (block_size < 32U || block_size > 1024U ||
-        (block_size & (block_size - 1U)) != 0U) {
+    if (block_size < 32U || block_size > 1024U || (block_size & (block_size - 1U)) != 0U) {
         throw std::invalid_argument(
             "softmax block size must be a power of two from 32 through 1024");
     }
 }
 
-[[nodiscard]] std::size_t checked_elements(
-    const std::size_t rows,
-    const std::size_t columns) {
+[[nodiscard]] std::size_t checked_elements(const std::size_t rows, const std::size_t columns) {
     if (rows != 0U && columns > std::numeric_limits<std::size_t>::max() / rows) {
         throw std::overflow_error("softmax element count overflows size_t");
     }
@@ -33,7 +30,7 @@ void validate_block_size(const unsigned int block_size) {
 }
 
 __device__ __forceinline__ float warp_max(float value) {
-    #pragma unroll
+#pragma unroll
     for (int offset = 16; offset > 0; offset >>= 1) {
         value = fmaxf(value, __shfl_down_sync(full_warp_mask, value, offset));
     }
@@ -41,20 +38,16 @@ __device__ __forceinline__ float warp_max(float value) {
 }
 
 __device__ __forceinline__ float warp_sum(float value) {
-    #pragma unroll
+#pragma unroll
     for (int offset = 16; offset > 0; offset >>= 1) {
         value += __shfl_down_sync(full_warp_mask, value, offset);
     }
     return value;
 }
 
-__global__ void softmax_naive_kernel(
-    const float* input,
-    float* output,
-    const std::size_t rows,
-    const std::size_t columns) {
-    const std::size_t row =
-        static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+__global__ void softmax_naive_kernel(const float* input, float* output, const std::size_t rows,
+                                     const std::size_t columns) {
+    const std::size_t row = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (row >= rows) {
         return;
     }
@@ -73,11 +66,8 @@ __global__ void softmax_naive_kernel(
     }
 }
 
-__global__ void softmax_block_kernel(
-    const float* input,
-    float* output,
-    const std::size_t rows,
-    const std::size_t columns) {
+__global__ void softmax_block_kernel(const float* input, float* output, const std::size_t rows,
+                                     const std::size_t columns) {
     extern __shared__ float scratch[];
     const std::size_t row = blockIdx.x;
     if (row >= rows) {
@@ -118,11 +108,8 @@ __global__ void softmax_block_kernel(
     }
 }
 
-__global__ void softmax_warp_kernel(
-    const float* input,
-    float* output,
-    const std::size_t rows,
-    const std::size_t columns) {
+__global__ void softmax_warp_kernel(const float* input, float* output, const std::size_t rows,
+                                    const std::size_t columns) {
     __shared__ float warp_values[32];
     __shared__ float row_maximum;
     __shared__ float row_sum;
@@ -179,34 +166,29 @@ __global__ void softmax_warp_kernel(
     }
 }
 
-}  // namespace
+} // namespace
 
 const char* softmax_variant_name(const SoftmaxVariant variant) noexcept {
     switch (variant) {
-        case SoftmaxVariant::naive:
-            return "naive";
-        case SoftmaxVariant::block:
-            return "block";
-        case SoftmaxVariant::warp:
-            return "warp";
+    case SoftmaxVariant::naive:
+        return "naive";
+    case SoftmaxVariant::block:
+        return "block";
+    case SoftmaxVariant::warp:
+        return "warp";
     }
     return "unknown";
 }
 
-std::size_t softmax_dynamic_shared_memory_bytes(
-    const SoftmaxVariant variant,
-    const unsigned int block_size) {
+std::size_t softmax_dynamic_shared_memory_bytes(const SoftmaxVariant variant,
+                                                const unsigned int block_size) {
     validate_block_size(block_size);
-    return variant == SoftmaxVariant::block
-        ? static_cast<std::size_t>(block_size) * sizeof(float)
-        : 0U;
+    return variant == SoftmaxVariant::block ? static_cast<std::size_t>(block_size) * sizeof(float)
+                                            : 0U;
 }
 
-void softmax_cpu(
-    const float* input,
-    float* output,
-    const std::size_t rows,
-    const std::size_t columns) {
+void softmax_cpu(const float* input, float* output, const std::size_t rows,
+                 const std::size_t columns) {
     const std::size_t elements = checked_elements(rows, columns);
     if (elements == 0U) {
         return;
@@ -231,14 +213,9 @@ void softmax_cpu(
     }
 }
 
-void softmax_cuda(
-    const float* input,
-    float* output,
-    const std::size_t rows,
-    const std::size_t columns,
-    const SoftmaxVariant variant,
-    const unsigned int block_size,
-    const cudaStream_t stream) {
+void softmax_cuda(const float* input, float* output, const std::size_t rows,
+                  const std::size_t columns, const SoftmaxVariant variant,
+                  const unsigned int block_size, const cudaStream_t stream) {
     validate_block_size(block_size);
     const std::size_t elements = checked_elements(rows, columns);
     if (elements == 0U) {
@@ -252,14 +229,11 @@ void softmax_cuda(
     }
     if (variant == SoftmaxVariant::naive) {
         const auto grid = static_cast<unsigned int>((rows + block_size - 1U) / block_size);
-        softmax_naive_kernel<<<grid, block_size, 0U, stream>>>(
-            input, output, rows, columns);
+        softmax_naive_kernel<<<grid, block_size, 0U, stream>>>(input, output, rows, columns);
     } else if (variant == SoftmaxVariant::block) {
-        softmax_block_kernel<<<
-            static_cast<unsigned int>(rows),
-            block_size,
-            softmax_dynamic_shared_memory_bytes(variant, block_size),
-            stream>>>(input, output, rows, columns);
+        softmax_block_kernel<<<static_cast<unsigned int>(rows), block_size,
+                               softmax_dynamic_shared_memory_bytes(variant, block_size), stream>>>(
+            input, output, rows, columns);
     } else if (variant == SoftmaxVariant::warp) {
         softmax_warp_kernel<<<static_cast<unsigned int>(rows), block_size, 0U, stream>>>(
             input, output, rows, columns);
@@ -269,4 +243,4 @@ void softmax_cuda(
     CUDA_CHECK(cudaGetLastError());
 }
 
-}  // namespace warpforge
+} // namespace warpforge

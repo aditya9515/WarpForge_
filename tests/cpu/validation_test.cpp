@@ -30,8 +30,7 @@ void test_exact_and_empty_inputs() {
 void test_tolerance_and_error_summary() {
     const float expected[] = {100.0F, 1.0F, -4.0F};
     const float within_tolerance[] = {100.0005F, 1.000001F, -4.000001F};
-    const auto passing =
-        warpforge::validate_fp32(expected, within_tolerance, 3, {1.0e-5, 1.0e-5});
+    const auto passing = warpforge::validate_fp32(expected, within_tolerance, 3, {1.0e-5, 1.0e-5});
     require(passing.passed, "combined absolute/relative tolerance should pass");
 
     const float failing_values[] = {101.0F, 1.0F, -3.5F};
@@ -85,7 +84,7 @@ void test_non_finite_and_invalid_inputs() {
     require(null_input_threw, "null non-empty inputs should throw");
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {

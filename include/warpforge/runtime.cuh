@@ -26,21 +26,27 @@ enum class DType {
 [[nodiscard]] std::size_t dtype_size(DType dtype);
 
 class TensorShape final {
-public:
+  public:
     TensorShape() = default;
     TensorShape(std::initializer_list<std::size_t> dimensions);
     explicit TensorShape(std::vector<std::size_t> dimensions);
 
-    [[nodiscard]] bool empty() const noexcept { return element_count_ == 0; }
-    [[nodiscard]] std::size_t rank() const noexcept { return dimensions_.size(); }
+    [[nodiscard]] bool empty() const noexcept {
+        return element_count_ == 0;
+    }
+    [[nodiscard]] std::size_t rank() const noexcept {
+        return dimensions_.size();
+    }
     [[nodiscard]] std::size_t dimension(std::size_t index) const;
     [[nodiscard]] const std::vector<std::size_t>& dimensions() const noexcept {
         return dimensions_;
     }
-    [[nodiscard]] std::size_t element_count() const noexcept { return element_count_; }
+    [[nodiscard]] std::size_t element_count() const noexcept {
+        return element_count_;
+    }
     [[nodiscard]] std::size_t byte_size(DType dtype) const;
 
-private:
+  private:
     void update_element_count();
 
     std::vector<std::size_t> dimensions_;
@@ -56,38 +62,39 @@ inline std::size_t checked_byte_count(const std::size_t count, const std::size_t
     return count * element_size;
 }
 
-template <typename T>
-struct DTypeFor;
+template <typename T> struct DTypeFor;
 
-template <>
-struct DTypeFor<float> {
+template <> struct DTypeFor<float> {
     static constexpr DType value = DType::fp32;
 };
 
-template <>
-struct DTypeFor<__half> {
+template <> struct DTypeFor<__half> {
     static constexpr DType value = DType::fp16;
 };
 
-}  // namespace detail
+} // namespace detail
 
-template <typename T>
-class DeviceBuffer final {
-public:
-    static_assert(std::is_trivially_copyable_v<T>, "DeviceBuffer requires trivially copyable elements");
+template <typename T> class DeviceBuffer final {
+  public:
+    static_assert(std::is_trivially_copyable_v<T>,
+                  "DeviceBuffer requires trivially copyable elements");
 
     DeviceBuffer() noexcept = default;
 
-    explicit DeviceBuffer(const std::size_t count) { allocate(count); }
+    explicit DeviceBuffer(const std::size_t count) {
+        allocate(count);
+    }
 
-    ~DeviceBuffer() noexcept { reset_noexcept(); }
+    ~DeviceBuffer() noexcept {
+        reset_noexcept();
+    }
 
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
     DeviceBuffer(DeviceBuffer&& other) noexcept
-        : pointer_(std::exchange(other.pointer_, nullptr)),
-          count_(std::exchange(other.count_, 0)) {}
+        : pointer_(std::exchange(other.pointer_, nullptr)), count_(std::exchange(other.count_, 0)) {
+    }
 
     DeviceBuffer& operator=(DeviceBuffer&& other) noexcept {
         if (this != &other) {
@@ -136,21 +143,36 @@ public:
         std::swap(count_, other.count_);
     }
 
-    [[nodiscard]] T* data() noexcept { return pointer_; }
-    [[nodiscard]] const T* data() const noexcept { return pointer_; }
-    [[nodiscard]] T* get() noexcept { return pointer_; }
-    [[nodiscard]] const T* get() const noexcept { return pointer_; }
-    [[nodiscard]] T* native_handle() noexcept { return pointer_; }
-    [[nodiscard]] const T* native_handle() const noexcept { return pointer_; }
-    [[nodiscard]] std::size_t size() const noexcept { return count_; }
-    [[nodiscard]] std::size_t byte_size() const noexcept { return count_ * sizeof(T); }
-    [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
+    [[nodiscard]] T* data() noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] const T* data() const noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] T* get() noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] const T* get() const noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] T* native_handle() noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] const T* native_handle() const noexcept {
+        return pointer_;
+    }
+    [[nodiscard]] std::size_t size() const noexcept {
+        return count_;
+    }
+    [[nodiscard]] std::size_t byte_size() const noexcept {
+        return count_ * sizeof(T);
+    }
+    [[nodiscard]] bool empty() const noexcept {
+        return count_ == 0;
+    }
 
-    void copy_from_host_async(
-        const T* source,
-        const std::size_t count,
-        const cudaStream_t stream,
-        const std::size_t destination_offset = 0) {
+    void copy_from_host_async(const T* source, const std::size_t count, const cudaStream_t stream,
+                              const std::size_t destination_offset = 0) {
         check_range(destination_offset, count);
         if (count == 0) {
             return;
@@ -158,19 +180,13 @@ public:
         if (source == nullptr) {
             throw std::invalid_argument("host source is null for a non-empty copy");
         }
-        CUDA_CHECK(cudaMemcpyAsync(
-            pointer_ + destination_offset,
-            source,
-            detail::checked_byte_count(count, sizeof(T)),
-            cudaMemcpyHostToDevice,
-            stream));
+        CUDA_CHECK(cudaMemcpyAsync(pointer_ + destination_offset, source,
+                                   detail::checked_byte_count(count, sizeof(T)),
+                                   cudaMemcpyHostToDevice, stream));
     }
 
-    void copy_to_host_async(
-        T* destination,
-        const std::size_t count,
-        const cudaStream_t stream,
-        const std::size_t source_offset = 0) const {
+    void copy_to_host_async(T* destination, const std::size_t count, const cudaStream_t stream,
+                            const std::size_t source_offset = 0) const {
         check_range(source_offset, count);
         if (count == 0) {
             return;
@@ -178,15 +194,12 @@ public:
         if (destination == nullptr) {
             throw std::invalid_argument("host destination is null for a non-empty copy");
         }
-        CUDA_CHECK(cudaMemcpyAsync(
-            destination,
-            pointer_ + source_offset,
-            detail::checked_byte_count(count, sizeof(T)),
-            cudaMemcpyDeviceToHost,
-            stream));
+        CUDA_CHECK(cudaMemcpyAsync(destination, pointer_ + source_offset,
+                                   detail::checked_byte_count(count, sizeof(T)),
+                                   cudaMemcpyDeviceToHost, stream));
     }
 
-private:
+  private:
     void check_range(const std::size_t offset, const std::size_t count) const {
         if (offset > count_ || count > count_ - offset) {
             throw std::out_of_range("device buffer copy exceeds allocation");
@@ -208,7 +221,7 @@ private:
 class CudaEvent;
 
 class CudaStream final {
-public:
+  public:
     CudaStream();
     explicit CudaStream(unsigned int flags);
     ~CudaStream() noexcept;
@@ -222,16 +235,20 @@ public:
     void wait(const CudaEvent& event) const;
     void reset();
     [[nodiscard]] cudaStream_t release() noexcept;
-    [[nodiscard]] cudaStream_t get() const noexcept { return stream_; }
-    [[nodiscard]] cudaStream_t native_handle() const noexcept { return stream_; }
+    [[nodiscard]] cudaStream_t get() const noexcept {
+        return stream_;
+    }
+    [[nodiscard]] cudaStream_t native_handle() const noexcept {
+        return stream_;
+    }
 
-private:
+  private:
     void reset_noexcept() noexcept;
     cudaStream_t stream_{nullptr};
 };
 
 class CudaEvent final {
-public:
+  public:
     CudaEvent();
     explicit CudaEvent(unsigned int flags);
     ~CudaEvent() noexcept;
@@ -242,59 +259,79 @@ public:
     CudaEvent& operator=(CudaEvent&& other) noexcept;
 
     void record(cudaStream_t stream = nullptr) const;
-    void record(const CudaStream& stream) const { record(stream.native_handle()); }
+    void record(const CudaStream& stream) const {
+        record(stream.native_handle());
+    }
     void synchronize() const;
     [[nodiscard]] float elapsed_ms_since(const CudaEvent& start) const;
     void reset();
     [[nodiscard]] cudaEvent_t release() noexcept;
-    [[nodiscard]] cudaEvent_t get() const noexcept { return event_; }
-    [[nodiscard]] cudaEvent_t native_handle() const noexcept { return event_; }
+    [[nodiscard]] cudaEvent_t get() const noexcept {
+        return event_;
+    }
+    [[nodiscard]] cudaEvent_t native_handle() const noexcept {
+        return event_;
+    }
 
-private:
+  private:
     void reset_noexcept() noexcept;
     cudaEvent_t event_{nullptr};
 };
 
 class TensorView final {
-public:
+  public:
     TensorView() = default;
     TensorView(void* data, TensorShape shape, DType dtype);
 
-    [[nodiscard]] void* data() noexcept { return data_; }
-    [[nodiscard]] const void* data() const noexcept { return data_; }
-    [[nodiscard]] void* native_handle() noexcept { return data_; }
-    [[nodiscard]] const void* native_handle() const noexcept { return data_; }
-    [[nodiscard]] const TensorShape& shape() const noexcept { return shape_; }
-    [[nodiscard]] DType dtype() const noexcept { return dtype_; }
-    [[nodiscard]] std::size_t element_count() const noexcept { return shape_.element_count(); }
-    [[nodiscard]] std::size_t byte_size() const { return shape_.byte_size(dtype_); }
-    [[nodiscard]] bool empty() const noexcept { return shape_.empty(); }
+    [[nodiscard]] void* data() noexcept {
+        return data_;
+    }
+    [[nodiscard]] const void* data() const noexcept {
+        return data_;
+    }
+    [[nodiscard]] void* native_handle() noexcept {
+        return data_;
+    }
+    [[nodiscard]] const void* native_handle() const noexcept {
+        return data_;
+    }
+    [[nodiscard]] const TensorShape& shape() const noexcept {
+        return shape_;
+    }
+    [[nodiscard]] DType dtype() const noexcept {
+        return dtype_;
+    }
+    [[nodiscard]] std::size_t element_count() const noexcept {
+        return shape_.element_count();
+    }
+    [[nodiscard]] std::size_t byte_size() const {
+        return shape_.byte_size(dtype_);
+    }
+    [[nodiscard]] bool empty() const noexcept {
+        return shape_.empty();
+    }
 
-    template <typename T>
-    [[nodiscard]] T* data_as() {
+    template <typename T> [[nodiscard]] T* data_as() {
         validate_type<T>();
         return static_cast<T*>(data_);
     }
 
-    template <typename T>
-    [[nodiscard]] const T* data_as() const {
+    template <typename T> [[nodiscard]] const T* data_as() const {
         validate_type<T>();
         return static_cast<const T*>(data_);
     }
 
-private:
-    template <typename T>
-    void validate_type() const {
+  private:
+    template <typename T> void validate_type() const {
         using Element = std::remove_cv_t<T>;
-        if constexpr (
-            std::is_same_v<Element, float> || std::is_same_v<Element, __half>) {
+        if constexpr (std::is_same_v<Element, float> || std::is_same_v<Element, __half>) {
             if (detail::DTypeFor<Element>::value != dtype_) {
-                throw std::invalid_argument("TensorView dtype does not match requested element type");
+                throw std::invalid_argument(
+                    "TensorView dtype does not match requested element type");
             }
         } else {
-            static_assert(
-                std::is_same_v<Element, float> || std::is_same_v<Element, __half>,
-                "TensorView supports only float and __half");
+            static_assert(std::is_same_v<Element, float> || std::is_same_v<Element, __half>,
+                          "TensorView supports only float and __half");
         }
     }
 
@@ -304,7 +341,7 @@ private:
 };
 
 class Tensor final {
-public:
+  public:
     Tensor() = default;
     Tensor(TensorShape shape, DType dtype);
     ~Tensor() noexcept = default;
@@ -317,26 +354,42 @@ public:
     void resize(TensorShape shape, DType dtype);
     void reset();
 
-    [[nodiscard]] TensorView view() { return TensorView(storage_.data(), shape_, dtype_); }
-    [[nodiscard]] void* native_handle() noexcept { return storage_.data(); }
-    [[nodiscard]] const void* native_handle() const noexcept { return storage_.data(); }
-    [[nodiscard]] const TensorShape& shape() const noexcept { return shape_; }
-    [[nodiscard]] DType dtype() const noexcept { return dtype_; }
-    [[nodiscard]] std::size_t element_count() const noexcept { return shape_.element_count(); }
-    [[nodiscard]] std::size_t byte_size() const noexcept { return storage_.size(); }
-    [[nodiscard]] bool empty() const noexcept { return storage_.empty(); }
+    [[nodiscard]] TensorView view() {
+        return TensorView(storage_.data(), shape_, dtype_);
+    }
+    [[nodiscard]] void* native_handle() noexcept {
+        return storage_.data();
+    }
+    [[nodiscard]] const void* native_handle() const noexcept {
+        return storage_.data();
+    }
+    [[nodiscard]] const TensorShape& shape() const noexcept {
+        return shape_;
+    }
+    [[nodiscard]] DType dtype() const noexcept {
+        return dtype_;
+    }
+    [[nodiscard]] std::size_t element_count() const noexcept {
+        return shape_.element_count();
+    }
+    [[nodiscard]] std::size_t byte_size() const noexcept {
+        return storage_.size();
+    }
+    [[nodiscard]] bool empty() const noexcept {
+        return storage_.empty();
+    }
 
     void copy_from_host_async(const void* source, std::size_t bytes, cudaStream_t stream);
     void copy_to_host_async(void* destination, std::size_t bytes, cudaStream_t stream) const;
 
-private:
+  private:
     DeviceBuffer<std::byte> storage_;
     TensorShape shape_;
     DType dtype_{DType::fp32};
 };
 
 class DeviceWorkspace final {
-public:
+  public:
     explicit DeviceWorkspace(std::size_t capacity_bytes = 0);
     ~DeviceWorkspace() noexcept = default;
 
@@ -346,24 +399,32 @@ public:
     DeviceWorkspace& operator=(DeviceWorkspace&& other) noexcept;
 
     void reserve(std::size_t capacity_bytes);
-    void clear() noexcept { used_bytes_ = 0; }
+    void clear() noexcept {
+        used_bytes_ = 0;
+    }
     void reset();
 
     [[nodiscard]] void* allocate_bytes(std::size_t bytes, std::size_t alignment = 256);
-    [[nodiscard]] TensorView allocate_view(
-        const TensorShape& shape,
-        DType dtype,
-        std::size_t alignment = 256);
+    [[nodiscard]] TensorView allocate_view(const TensorShape& shape, DType dtype,
+                                           std::size_t alignment = 256);
 
-    [[nodiscard]] void* native_handle() noexcept { return storage_.data(); }
-    [[nodiscard]] const void* native_handle() const noexcept { return storage_.data(); }
-    [[nodiscard]] std::size_t capacity_bytes() const noexcept { return storage_.size(); }
-    [[nodiscard]] std::size_t used_bytes() const noexcept { return used_bytes_; }
+    [[nodiscard]] void* native_handle() noexcept {
+        return storage_.data();
+    }
+    [[nodiscard]] const void* native_handle() const noexcept {
+        return storage_.data();
+    }
+    [[nodiscard]] std::size_t capacity_bytes() const noexcept {
+        return storage_.size();
+    }
+    [[nodiscard]] std::size_t used_bytes() const noexcept {
+        return used_bytes_;
+    }
     [[nodiscard]] std::size_t remaining_bytes() const noexcept {
         return storage_.size() - used_bytes_;
     }
 
-private:
+  private:
     DeviceBuffer<std::byte> storage_;
     std::size_t used_bytes_{0};
 };
@@ -374,4 +435,4 @@ static_assert(std::is_nothrow_destructible_v<CudaEvent>);
 static_assert(std::is_nothrow_destructible_v<Tensor>);
 static_assert(std::is_nothrow_destructible_v<DeviceWorkspace>);
 
-}  // namespace warpforge
+} // namespace warpforge

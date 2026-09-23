@@ -17,9 +17,8 @@
 
 namespace {
 
-template <typename T>
-class TestDeviceBuffer final {
-public:
+template <typename T> class TestDeviceBuffer final {
+  public:
     explicit TestDeviceBuffer(const std::size_t count) {
         if (count > 0) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
@@ -39,13 +38,12 @@ public:
         return pointer_;
     }
 
-private:
+  private:
     T* pointer_{};
 };
 
-template <typename T>
-class TestPinnedBuffer final {
-public:
+template <typename T> class TestPinnedBuffer final {
+  public:
     explicit TestPinnedBuffer(const std::size_t count) : count_(count) {
         if (count > 0) {
             CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
@@ -73,13 +71,13 @@ public:
         return count_;
     }
 
-private:
+  private:
     T* pointer_{};
     std::size_t count_{};
 };
 
 class TestStream final {
-public:
+  public:
     TestStream() {
         CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
     }
@@ -97,20 +95,18 @@ public:
         return stream_;
     }
 
-private:
+  private:
     cudaStream_t stream_{};
 };
 
-void require_valid(
-    const std::vector<float>& expected,
-    const std::vector<float>& actual,
-    const std::string& label,
-    const warpforge::Tolerance tolerance = {1.0e-5, 1.0e-5}) {
-    const auto result = warpforge::validate_fp32(
-        expected.data(), actual.data(), expected.size(), tolerance);
+void require_valid(const std::vector<float>& expected, const std::vector<float>& actual,
+                   const std::string& label,
+                   const warpforge::Tolerance tolerance = {1.0e-5, 1.0e-5}) {
+    const auto result =
+        warpforge::validate_fp32(expected.data(), actual.data(), expected.size(), tolerance);
     if (!result.passed) {
-        throw std::runtime_error(
-            label + " mismatch at index " + std::to_string(result.worst_index));
+        throw std::runtime_error(label + " mismatch at index " +
+                                 std::to_string(result.worst_index));
     }
 }
 
@@ -134,8 +130,8 @@ void test_saxpy(const std::size_t element_count, const unsigned int block_size) 
         const std::size_t bytes = element_count * sizeof(float);
         CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(device_output.get(), initial.data(), bytes, cudaMemcpyHostToDevice));
-        warpforge::saxpy_cuda(
-            1.75F, device_input.get(), device_output.get(), element_count, block_size);
+        warpforge::saxpy_cuda(1.75F, device_input.get(), device_output.get(), element_count,
+                              block_size);
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), bytes, cudaMemcpyDeviceToHost));
     } else {
@@ -156,8 +152,8 @@ void test_copy(const std::size_t element_count, const unsigned int block_size) {
     if (element_count > 0) {
         const std::size_t bytes = element_count * sizeof(float);
         CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), bytes, cudaMemcpyHostToDevice));
-        warpforge::memory_copy_cuda(
-            device_input.get(), device_output.get(), element_count, block_size);
+        warpforge::memory_copy_cuda(device_input.get(), device_output.get(), element_count,
+                                    block_size);
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), bytes, cudaMemcpyDeviceToHost));
     } else {
@@ -174,35 +170,25 @@ void test_strided_copy(const std::size_t element_count, const std::size_t stride
     for (std::size_t index = 0; index < source_count; ++index) {
         input[index] = static_cast<float>((index * 17U) % 251U);
     }
-    warpforge::strided_copy_cpu(
-        input.data(), expected.data(), element_count, stride);
+    warpforge::strided_copy_cpu(input.data(), expected.data(), element_count, stride);
 
     TestDeviceBuffer<float> device_input(source_count);
     TestDeviceBuffer<float> device_output(element_count);
     if (element_count > 0) {
-        CUDA_CHECK(cudaMemcpy(
-            device_input.get(),
-            input.data(),
-            source_count * sizeof(float),
-            cudaMemcpyHostToDevice));
-        warpforge::strided_copy_cuda(
-            device_input.get(), device_output.get(), element_count, stride);
+        CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), source_count * sizeof(float),
+                              cudaMemcpyHostToDevice));
+        warpforge::strided_copy_cuda(device_input.get(), device_output.get(), element_count,
+                                     stride);
         CUDA_CHECK(cudaDeviceSynchronize());
-        CUDA_CHECK(cudaMemcpy(
-            actual.data(),
-            device_output.get(),
-            element_count * sizeof(float),
-            cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), element_count * sizeof(float),
+                              cudaMemcpyDeviceToHost));
     } else {
         warpforge::strided_copy_cuda(nullptr, nullptr, 0, stride);
     }
     require_valid(expected, actual, "strided copy");
 }
 
-void test_transpose(
-    const std::size_t rows,
-    const std::size_t columns,
-    const bool tiled) {
+void test_transpose(const std::size_t rows, const std::size_t columns, const bool tiled) {
     const std::size_t element_count = rows * columns;
     std::vector<float> input(element_count);
     std::vector<float> expected(element_count);
@@ -218,11 +204,9 @@ void test_transpose(
         const std::size_t bytes = element_count * sizeof(float);
         CUDA_CHECK(cudaMemcpy(device_input.get(), input.data(), bytes, cudaMemcpyHostToDevice));
         if (tiled) {
-            warpforge::transpose_tiled_cuda(
-                device_input.get(), device_output.get(), rows, columns);
+            warpforge::transpose_tiled_cuda(device_input.get(), device_output.get(), rows, columns);
         } else {
-            warpforge::transpose_naive_cuda(
-                device_input.get(), device_output.get(), rows, columns);
+            warpforge::transpose_naive_cuda(device_input.get(), device_output.get(), rows, columns);
         }
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), bytes, cudaMemcpyDeviceToHost));
@@ -237,8 +221,7 @@ void test_transpose(
 void test_two_stream_ordering() {
     constexpr std::size_t element_count = 1003;
     constexpr std::size_t chunk_count = 5;
-    constexpr std::size_t chunk_capacity =
-        (element_count + chunk_count - 1U) / chunk_count;
+    constexpr std::size_t chunk_capacity = (element_count + chunk_count - 1U) / chunk_count;
     constexpr float alpha = 0.625F;
 
     TestPinnedBuffer<float> input(element_count);
@@ -252,10 +235,10 @@ void test_two_stream_ordering() {
     }
 
     std::array<TestStream, 2> streams{};
-    std::array<TestDeviceBuffer<float>, 2> device_input{
-        TestDeviceBuffer<float>{chunk_capacity}, TestDeviceBuffer<float>{chunk_capacity}};
-    std::array<TestDeviceBuffer<float>, 2> device_output{
-        TestDeviceBuffer<float>{chunk_capacity}, TestDeviceBuffer<float>{chunk_capacity}};
+    std::array<TestDeviceBuffer<float>, 2> device_input{TestDeviceBuffer<float>{chunk_capacity},
+                                                        TestDeviceBuffer<float>{chunk_capacity}};
+    std::array<TestDeviceBuffer<float>, 2> device_output{TestDeviceBuffer<float>{chunk_capacity},
+                                                         TestDeviceBuffer<float>{chunk_capacity}};
 
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk) {
         const std::size_t stream_index = chunk % streams.size();
@@ -263,31 +246,15 @@ void test_two_stream_ordering() {
         const std::size_t count = std::min(chunk_capacity, element_count - offset);
         const std::size_t bytes = count * sizeof(float);
         const cudaStream_t stream = streams[stream_index].get();
-        CUDA_CHECK(cudaMemcpyAsync(
-            device_input[stream_index].get(),
-            input.get() + offset,
-            bytes,
-            cudaMemcpyHostToDevice,
-            stream));
-        CUDA_CHECK(cudaMemcpyAsync(
-            device_output[stream_index].get(),
-            initial.get() + offset,
-            bytes,
-            cudaMemcpyHostToDevice,
-            stream));
-        warpforge::saxpy_cuda(
-            alpha,
-            device_input[stream_index].get(),
-            device_output[stream_index].get(),
-            count,
-            warpforge::memory_default_block_size,
-            stream);
-        CUDA_CHECK(cudaMemcpyAsync(
-            output.get() + offset,
-            device_output[stream_index].get(),
-            bytes,
-            cudaMemcpyDeviceToHost,
-            stream));
+        CUDA_CHECK(cudaMemcpyAsync(device_input[stream_index].get(), input.get() + offset, bytes,
+                                   cudaMemcpyHostToDevice, stream));
+        CUDA_CHECK(cudaMemcpyAsync(device_output[stream_index].get(), initial.get() + offset, bytes,
+                                   cudaMemcpyHostToDevice, stream));
+        warpforge::saxpy_cuda(alpha, device_input[stream_index].get(),
+                              device_output[stream_index].get(), count,
+                              warpforge::memory_default_block_size, stream);
+        CUDA_CHECK(cudaMemcpyAsync(output.get() + offset, device_output[stream_index].get(), bytes,
+                                   cudaMemcpyDeviceToHost, stream));
     }
     for (const auto& stream : streams) {
         CUDA_CHECK(cudaStreamSynchronize(stream.get()));
@@ -329,12 +296,11 @@ void test_invalid_arguments() {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
-        constexpr std::array<std::size_t, 10> sizes{
-            0, 1, 31, 32, 33, 255, 256, 257, 1003, 65537};
+        constexpr std::array<std::size_t, 10> sizes{0, 1, 31, 32, 33, 255, 256, 257, 1003, 65537};
         constexpr std::array<unsigned int, 5> block_sizes{32U, 64U, 128U, 256U, 512U};
         for (const std::size_t size : sizes) {
             test_saxpy(size, warpforge::memory_default_block_size);
@@ -344,20 +310,18 @@ int main() {
             test_saxpy(1003, block_size);
             test_copy(1003, block_size);
         }
-        for (const std::size_t stride :
-             std::array<std::size_t, 6>{1U, 2U, 4U, 8U, 16U, 32U}) {
+        for (const std::size_t stride : std::array<std::size_t, 6>{1U, 2U, 4U, 8U, 16U, 32U}) {
             test_strided_copy(1003, stride);
         }
         for (const auto [rows, columns] :
-             std::array<std::array<std::size_t, 2>, 8>{
-                 std::array<std::size_t, 2>{0, 0},
-                 {0, 17},
-                 {1, 1},
-                 {3, 5},
-                 {31, 33},
-                 {32, 32},
-                 {33, 65},
-                 {129, 257}}) {
+             std::array<std::array<std::size_t, 2>, 8>{std::array<std::size_t, 2>{0, 0},
+                                                       {0, 17},
+                                                       {1, 1},
+                                                       {3, 5},
+                                                       {31, 33},
+                                                       {32, 32},
+                                                       {33, 65},
+                                                       {129, 257}}) {
             test_transpose(rows, columns, false);
             test_transpose(rows, columns, true);
         }

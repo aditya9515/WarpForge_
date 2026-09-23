@@ -7,11 +7,8 @@
 
 namespace warpforge {
 
-ValidationResult validate_fp32(
-    const float* expected,
-    const float* actual,
-    const std::size_t element_count,
-    const Tolerance tolerance) {
+ValidationResult validate_fp32(const float* expected, const float* actual,
+                               const std::size_t element_count, const Tolerance tolerance) {
     if (!std::isfinite(tolerance.absolute) || !std::isfinite(tolerance.relative) ||
         tolerance.absolute < 0.0 || tolerance.relative < 0.0) {
         throw std::invalid_argument("validation tolerances must be finite and non-negative");
@@ -42,9 +39,8 @@ ValidationResult validate_fp32(
             value_passed = absolute_error <= allowed_error;
 
             if (expected_value == 0.0) {
-                relative_error = absolute_error == 0.0
-                    ? 0.0
-                    : std::numeric_limits<double>::infinity();
+                relative_error =
+                    absolute_error == 0.0 ? 0.0 : std::numeric_limits<double>::infinity();
             } else {
                 relative_error = absolute_error / std::abs(expected_value);
             }
@@ -74,4 +70,4 @@ ValidationResult validate_fp32(
     return result;
 }
 
-}  // namespace warpforge
+} // namespace warpforge

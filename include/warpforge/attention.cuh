@@ -20,32 +20,20 @@ inline constexpr unsigned int attention_default_block_size = 256U;
 
 // Q/K/V and context use contiguous [batch, sequence, heads, head_dimension].
 // Scores/probabilities use contiguous [batch, heads, query, key].
-void attention_scores_cpu(
-    const float* query,
-    const float* key,
-    float* scores,
-    const AttentionProblem& problem);
+void attention_scores_cpu(const float* query, const float* key, float* scores,
+                          const AttentionProblem& problem);
 
-void attention_scores_cuda(
-    const float* query,
-    const float* key,
-    float* scores,
-    const AttentionProblem& problem,
-    unsigned int block_size = attention_default_block_size,
-    cudaStream_t stream = nullptr);
+void attention_scores_cuda(const float* query, const float* key, float* scores,
+                           const AttentionProblem& problem,
+                           unsigned int block_size = attention_default_block_size,
+                           cudaStream_t stream = nullptr);
 
-void attention_value_cpu(
-    const float* probabilities,
-    const float* value,
-    float* context,
-    const AttentionProblem& problem);
+void attention_value_cpu(const float* probabilities, const float* value, float* context,
+                         const AttentionProblem& problem);
 
-void attention_value_cuda(
-    const float* probabilities,
-    const float* value,
-    float* context,
-    const AttentionProblem& problem,
-    unsigned int block_size = attention_default_block_size,
-    cudaStream_t stream = nullptr);
+void attention_value_cuda(const float* probabilities, const float* value, float* context,
+                          const AttentionProblem& problem,
+                          unsigned int block_size = attention_default_block_size,
+                          cudaStream_t stream = nullptr);
 
-}  // namespace warpforge
+} // namespace warpforge

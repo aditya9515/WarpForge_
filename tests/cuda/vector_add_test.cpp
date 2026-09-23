@@ -17,9 +17,8 @@
 
 namespace {
 
-template <typename T>
-class TestDeviceAllocation final {
-public:
+template <typename T> class TestDeviceAllocation final {
+  public:
     explicit TestDeviceAllocation(const std::size_t count) {
         if (count > 0) {
             CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&pointer_), count * sizeof(T)));
@@ -39,7 +38,7 @@ public:
         return pointer_;
     }
 
-private:
+  private:
     T* pointer_{};
 };
 
@@ -64,12 +63,8 @@ void run_case(const std::size_t element_count, const unsigned int block_size) {
         const std::size_t bytes = element_count * sizeof(float);
         CUDA_CHECK(cudaMemcpy(device_left.get(), left.data(), bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(device_right.get(), right.data(), bytes, cudaMemcpyHostToDevice));
-        warpforge::vector_add_cuda(
-            device_left.get(),
-            device_right.get(),
-            device_output.get(),
-            element_count,
-            block_size);
+        warpforge::vector_add_cuda(device_left.get(), device_right.get(), device_output.get(),
+                                   element_count, block_size);
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_CHECK(cudaMemcpy(actual.data(), device_output.get(), bytes, cudaMemcpyDeviceToHost));
     } else {
@@ -83,7 +78,7 @@ void run_case(const std::size_t element_count, const unsigned int block_size) {
     }
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     try {
@@ -107,8 +102,8 @@ int main() {
 
         bool oversized_grid_threw = false;
         try {
-            static_cast<void>(warpforge::vector_add_grid_size(
-                std::numeric_limits<std::size_t>::max(), 1));
+            static_cast<void>(
+                warpforge::vector_add_grid_size(std::numeric_limits<std::size_t>::max(), 1));
         } catch (const std::overflow_error&) {
             oversized_grid_threw = true;
         }
@@ -120,8 +115,8 @@ int main() {
         try {
             warpforge::BenchmarkConfig invalid_config;
             invalid_config.measurement_iterations = 0;
-            static_cast<void>(warpforge::measure_cuda_kernel(
-                invalid_config, nullptr, [](cudaStream_t) {}));
+            static_cast<void>(
+                warpforge::measure_cuda_kernel(invalid_config, nullptr, [](cudaStream_t) {}));
         } catch (const std::invalid_argument&) {
             zero_iterations_threw = true;
         }
