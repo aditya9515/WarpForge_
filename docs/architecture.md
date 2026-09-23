@@ -202,6 +202,6 @@ Work stops at each boundary for review. Later-stage interfaces must not be intro
 - GEMM currently supports contiguous no-transpose matrices with `alpha=1`, `beta=0`, and FP32 output; it is deliberately not a general BLAS wrapper.
 - MiniInfer orchestration is contiguous FP32 only; non-GEMM Transformer kernels still use explicit pointers/dimensions, and FP16 block execution does not yet exist.
 - Fusion is limited to residual + RMSNorm and SiLU + multiply; attention/GEMM/mask fusion is not implemented.
-- Linux and WSL2 remain planned but unvalidated. CPU PyTorch, PyTorch CUDA, native custom/cuBLAS MiniInfer, and TensorRT 10.7 FP32/mixed-FP16 paths are validated on Windows for the single fixed Stage 10 shape.
+- Hosted Ubuntu 24.04 validates only the CUDA-free CPU library and fixture tests. Local WSL2 and Linux CUDA remain unvalidated. CPU PyTorch, PyTorch CUDA, native custom/cuBLAS MiniInfer, and TensorRT 10.7 FP32/mixed-FP16 paths are validated on Windows for the single fixed Stage 10 shape.
 - TensorRT remains an offline fixed-shape baseline: engines are platform-specific generated artifacts, the C++ runtime does not load them, and no custom plugin or dynamic-shape path exists.
 - The 4 GB device requires workload sizes to be selected from measured allocation needs.

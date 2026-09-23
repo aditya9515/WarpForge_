@@ -98,7 +98,7 @@ The ignored `.stage10-tools` directory contains TensorRT 10.7.0.23 and `trtexec`
 - Windows MSVC 19.44 builds the CUDA-free `WarpForge::cpu` library with warnings as errors and passes its three CPU/fixture CTests.
 - The default Windows CUDA build remains warning-clean with CUDA 12.6.85 and passes all 31 CTests plus focused Compute Sanitizer checks.
 - Hosted GitHub Actions configurations compile/test CPU-only on Windows and Linux. A workflow definition is not a successful remote run; GPU tests remain local or opt-in self-hosted only.
-- Ubuntu WSL2 lacks `cmake` and a C++ compiler, so Linux CPU execution waits for separate installation approval. No Linux CUDA validation is claimed.
+- Hosted Ubuntu 24.04 CPU-only CI passes. The separate local Ubuntu WSL2 installation lacks `cmake` and a C++ compiler, so local WSL2 execution waits for separate installation approval. No Linux CUDA validation is claimed.
 - Docker Desktop's Linux daemon is unavailable; a Docker development image is deferred instead of committed untested.
 
 ### Planned, not yet validated

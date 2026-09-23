@@ -1,14 +1,14 @@
 # WarpForge
 
-WarpForge is a staged CUDA/C++ performance-engineering project that will grow from measured GPU fundamentals into a small, validated LLaMA-style inference runtime called MiniInfer.
+WarpForge is a CUDA/C++ performance-engineering project spanning measured GPU fundamentals and a small, validated LLaMA-style inference runtime called MiniInfer.
 
 The project is aimed at learning and demonstrating production-minded GPU engineering: numerical correctness, controlled benchmarking, profiler-guided optimization, NVIDIA library integration, and clear explanations of why performance changes.
 
 ## Current status
 
-**Stage 12 — release hardening: in progress.**
+**Stage 12 — portfolio release: complete.**
 
-The deterministic MiniInfer block has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. Stage 11 added a [profiler-backed analysis](docs/performance/profiler_analysis.md). Stage 12 now has a CUDA-free CPU library, warning-clean local Windows builds, all 31 local CUDA CTests and focused Compute Sanitizer checks passing, and a [hosted CPU CI run](https://github.com/aditya9515/WarpForge_/actions/runs/35818970719) passing on Ubuntu 24.04 and Windows Server 2022. Formatting verification and local WSL package installation still await separate approval; Stage 12 is not yet marked complete.
+The deterministic MiniInfer block has correctness-gated native custom, cuBLAS, eager PyTorch CUDA, TensorRT FP32, and TensorRT mixed-FP16 baselines. Stage 11 added a [profiler-backed analysis](docs/performance/profiler_analysis.md). Stage 12 adds a CUDA-free CPU library, warning-clean local Windows builds, 31 passing local CUDA CTests, focused Compute Sanitizer checks, and [hosted CI](https://github.com/aditya9515/WarpForge_/actions/runs/35819598851) passing Ubuntu/Windows CPU jobs and a repository-wide C++/CUDA formatting gate. Local WSL and Linux CUDA remain unvalidated; see the [release notes](docs/release.md).
 
 ## Goals
 
@@ -90,6 +90,8 @@ Stages are implemented one at a time. Completing one stage does not authorize wo
 
 WarpForge pairs inspectable CUDA kernels with trusted references, CUDA-event benchmarks, Nsight evidence, and a bounded one-block MiniInfer runtime. The strongest custom FP32 GEMM at 1024³ remains below cuBLAS (51.74% of its throughput); that comparison is a result, not a target to hide. The fixed-shape MiniInfer comparison also includes eager PyTorch CUDA and validated TensorRT FP32/mixed-FP16 engines. All measurements cited here are from the disclosed RTX 3050 Laptop GPU, with timing boundaries specified in their linked reports.
 
+Résumé summary: built a C++17/CUDA kernel library and single-block Transformer inference path, validated each numerical boundary against CPU/PyTorch references, compared custom kernels with cuBLAS/TensorRT, and used CUDA-event benchmarks plus Nsight evidence to explain—not just report—optimization results on a 4 GB laptop GPU.
+
 ![Selected Stage 11 optimization-ladder speedups, derived from measured CUDA-event medians](docs/performance/stage12_latency.svg)
 
 The [release summary CSV](benchmarks/results/stage12/release_summary.csv) records the exact baseline/optimized medians and source commit for this plot. It is a derived view of Stage 11 results, not a new Stage 12 benchmark. The [profiler analysis](docs/performance/profiler_analysis.md) explains why those changes helped and where MiniInfer still spends time.
@@ -104,7 +106,7 @@ cmake --build out/cpu --config Release
 ctest --test-dir out/cpu -C Release --output-on-failure
 ```
 
-On the audited Windows host, first enter the MSVC 14.44 developer shell below, then use `cmake --preset windows-msvc-cpu`, `cmake --build --preset windows-msvc-cpu`, and `ctest --preset windows-msvc-cpu`. This NMake preset avoids the OneDrive/Ninja stall seen earlier. The hosted [CPU workflow](.github/workflows/cpu.yml) uses Windows and Linux runners for CPU compilation, tests, Python syntax, documentation, and plot checks; it does not run CUDA. A `.clang-format` policy and check script are present, but the local formatting check and hosted gate await approval to install a pinned formatter. GPU validation stays in the local [Windows driver](scripts/test_gpu_windows.ps1) or the manually triggered [self-hosted workflow](.github/workflows/gpu-self-hosted.yml) on a separately configured NVIDIA machine. Details and platform limits are in the [release notes](docs/release.md).
+On the audited Windows host, first enter the MSVC 14.44 developer shell below, then use `cmake --preset windows-msvc-cpu`, `cmake --build --preset windows-msvc-cpu`, and `ctest --preset windows-msvc-cpu`. This NMake preset avoids the OneDrive/Ninja stall seen earlier. The hosted [CPU workflow](.github/workflows/cpu.yml) uses Windows and Linux runners for CPU compilation, tests, Python syntax, documentation, plot, and `clang-format-18` checks; it does not run CUDA. GPU validation stays in the local [Windows driver](scripts/test_gpu_windows.ps1) or the manually triggered [self-hosted workflow](.github/workflows/gpu-self-hosted.yml) on a separately configured NVIDIA machine. Details and platform limits are in the [release notes](docs/release.md).
 
 ## Build and verify on the audited Windows machine
 
@@ -973,3 +975,39 @@ The last five traced MiniInfer passes use one stream without GPU overlap. The cu
 ### Next stage
 
 Stage 12 will add production hardening: formatting, warning-clean builds, expanded tests, Compute Sanitizer workflows, CPU-only CMake and hosted CI, honest Windows/Linux portability documentation, MIT licensing, and polished release materials. Missing Linux/WSL packages or material environment changes will require separate approval. Stage 12 will not begin until explicitly requested.
+
+## Stage 12 completion report
+
+### Implemented and files
+
+- Split FP32 validation/sample statistics into the CUDA-free `WarpForge::cpu` library, with `WARPFORGE_ENABLE_CUDA=OFF` and warning-as-error CMake options; retained the CUDA-enabled default and the audited Windows NMake preset.
+- Expanded CPU tests for non-finite tolerances/samples and zero-valued statistics; added repeatable Windows GPU build/CTest/Compute Sanitizer scripts.
+- Applied the checked-in `.clang-format` style to all 61 tracked C++/CUDA files and enforced it with the preinstalled `clang-format-18` on hosted Ubuntu CI. No local formatter or WSL package was installed.
+- Added Windows/Linux hosted CPU CI, a separate opt-in self-hosted GPU workflow, the MIT license, repository/JSON/link checks, and a reproducible Stage 11-derived CSV/SVG release plot.
+- The principal new files are [release notes](docs/release.md), [CPU workflow](.github/workflows/cpu.yml), [GPU workflow](.github/workflows/gpu-self-hosted.yml), [format check](scripts/check_format.py), [repository check](scripts/check_repository.py), [plot generator](scripts/plot_benchmarks.py), [license](LICENSE), and [release summary](benchmarks/results/stage12/release_summary.csv).
+
+### Tests, commands, and evidence
+
+The audited Windows MSVC 14.44/CUDA 12.6 Release build is warning-clean. `cmake --preset windows-msvc-cpu`, its build preset, and `ctest --preset windows-msvc-cpu` pass 3/3 CPU/fixture tests. `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test_gpu_windows.ps1 -RunSanitizer` passes all 31 CTests, then runtime memcheck/racecheck/synccheck and MiniInfer memcheck with zero errors/hazards. `python scripts/check_repository.py`, `python scripts/plot_benchmarks.py --check`, Python `compileall`, and `git diff --check` pass. [Hosted run 35819598851](https://github.com/aditya9515/WarpForge_/actions/runs/35819598851) passes Ubuntu 24.04 and Windows Server 2022 CPU builds/tests plus the C++/CUDA format gate on code commit `a077677`.
+
+No new Stage 12 performance benchmark was run. The selected release plot derives four correctness-gated Stage 11 CUDA-event median speedups from clean source commit `f637452`: FP32 sum `2.712×`, FP32 GEMM `4.384×`, Softmax `5.546×`, and RMSNorm `4.466×`. Exact medians, variants, and source paths are in the [summary CSV](benchmarks/results/stage12/release_summary.csv); performance remains hardware- and timing-boundary-specific.
+
+### Concepts learned and limits
+
+The CPU/GPU dependency seam lets hosted runners compile and test meaningful shared logic without implying they tested CUDA. A formatting gate can use an existing hosted tool without modifying the local machine. CI evidence, local GPU tests, profiler measurements, and end-to-end timings answer distinct questions and remain labeled separately.
+
+Local WSL2 Ubuntu lacks CMake and a C++ compiler, so it was not modified or tested; hosted Ubuntu validates the CPU-only path, not Linux CUDA. Docker Desktop's Linux daemon is unavailable, so no untested Docker image was added. The opt-in GPU workflow requires a separately configured trusted NVIDIA runner and has not been run. MiniInfer remains one fixed FP32 block, not a model-serving framework.
+
+### Commits and Definition of Done
+
+- `2ac42af build: add CPU-only release verification gates`
+- `d23484c docs: record Stage 12 hosted CPU verification`
+- `dc981b1 ci: audit repository formatting with hosted clang-format`
+- `a077677 style: format C++ and CUDA sources and enforce CI gate`
+- `docs: complete Stage 12 portfolio release` (this report commit)
+
+**PASS within the available hardware/environment.** The documented Windows build, local CUDA correctness/sanitizer suite, hosted Linux/Windows CPU CI, formatting gate, license, release assets, and artifact policy all pass. Local WSL2, Linux CUDA, Docker, and unconfigured self-hosted GPU CI are explicitly unvalidated rather than presented as passing.
+
+### Next stage
+
+No further roadmap stage is defined. Any local WSL2 package installation, Linux CUDA port, model-runtime expansion, or new performance investigation is separate work and requires an explicit request.
